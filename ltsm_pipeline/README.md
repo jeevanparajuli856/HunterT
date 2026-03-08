@@ -149,3 +149,28 @@ Key artifacts:
 - Keep `--resume` enabled.
 - Keep `saved_models/` and `results/` synced to GCS.
 - If preempted, rerun the same `train` command; completed combos are skipped automatically.
+
+## 6) Spot Preemption Watcher (optional)
+
+Use `preempt_watch.sh` to detect Spot preemption notice and run an emergency sync.
+
+In a second tmux pane/session:
+
+```bash
+cd ~/HunterT/ltsm_pipeline
+chmod +x preempt_watch.sh
+export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://YOUR_BUCKET/ltsm/saved_models && gsutil -m rsync -r ./results gs://YOUR_BUCKET/ltsm/results'
+./preempt_watch.sh
+```
+
+Run training in another pane/session at the same time:
+
+```bash
+python main.py train --resume
+```
+
+Notes:
+
+- The metadata signal usually arrives about 30 seconds before shutdown.
+- Watcher logs are written to `preempt_watch.log`.
+- If preempted, recreate the VM, restore artifacts from GCS, and rerun `train --resume`.
