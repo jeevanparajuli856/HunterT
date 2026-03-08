@@ -137,6 +137,111 @@ def depth_first_attack(wordlist_file, root, request_limit=100000):
     return total_requests_list, successful_responses_list, failed_responses_list, 0
 
 
+def probabilistic_attack(train_root, test_root, wordlist_file, request_limit=100000):
+    """
+    Probability-prioritized baseline adapted from benchmarks.ipynb.
+
+    It first explores directories using training-tree occurrence probabilities, then
+    falls back to a wordlist pass for paths not yet discovered.
+
+    Args:
+        train_root: Root node of training tree with `count` attributes
+        test_root: Root node of test tree
+        wordlist_file (str): Path to wordlist file
+        request_limit (int): Max requests allowed
+
+    Returns:
+        tuple: (requests_list, successful_list, failed_list, time)
+    """
+    with open(wordlist_file, 'r') as f:
+        wordlist = [line.strip() for line in f]
+
+    total_requests = 0
+    successful_responses = 0
+    failed_responses = 0
+
+    total_requests_list = []
+    successful_responses_list = []
+    failed_responses_list = []
+
+    found_nodes = [test_root]
+    non_redundant_edges = set()
+
+    def record_metrics():
+        if total_requests == 1 or (total_requests - 1) % 20 == 0:
+            total_requests_list.append(total_requests)
+            successful_responses_list.append(successful_responses)
+            failed_responses_list.append(failed_responses)
+
+    def simulate(word, node):
+        nonlocal total_requests, successful_responses, failed_responses
+
+        total_requests += 1
+        children_map = {c.name: c for c in node.children}
+
+        if word in children_map:
+            child = children_map[word]
+            successful_responses += 1
+            found_nodes.append(child)
+            non_redundant_edges.add((id(node), id(child)))
+            return child
+
+        failed_responses += 1
+        return None
+
+    # Phase 1: priority exploration guided by training frequencies.
+    root_sum = max(1, sum(c.count for c in train_root.children))
+    heap = [
+        (-node.count / root_sum, node.name, random.randint(0, 1000000), node, test_root)
+        for node in train_root.children
+    ]
+    heapq.heapify(heap)
+
+    while heap and total_requests < request_limit:
+        _, word, _, train_node, target_test_node = heapq.heappop(heap)
+        matched_test_node = simulate(word, target_test_node)
+
+        if matched_test_node is not None:
+            child_sum = max(1, sum(c.count for c in train_node.children))
+            for child in train_node.children:
+                heapq.heappush(
+                    heap,
+                    (-child.count / child_sum, child.name, random.randint(0, 1000000), child, matched_test_node)
+                )
+
+        record_metrics()
+
+    # Phase 2: wordlist fallback for still-unseen edges.
+    word_idx = 0
+    node_idx = 0
+    while total_requests < request_limit:
+        if word_idx >= len(wordlist):
+            word_idx = 0
+            node_idx += 1
+        if node_idx >= len(found_nodes):
+            break
+
+        node = found_nodes[node_idx]
+        children_map = {c.name: c for c in node.children}
+        word = wordlist[word_idx]
+
+        if word in children_map and (id(node), id(children_map[word])) in non_redundant_edges:
+            word_idx += 1
+            continue
+
+        total_requests += 1
+        if word in children_map:
+            successful_responses += 1
+            found_nodes.append(children_map[word])
+        else:
+            failed_responses += 1
+
+        record_metrics()
+        word_idx += 1
+
+    return total_requests_list, successful_responses_list, failed_responses_list, 0
+
+
 def lm_attack(model, vocab, max_depth, test_root, device, request_limit=100000,
               prediction_limit=500, custom_tokenizer=None):
     """
