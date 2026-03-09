@@ -13,6 +13,17 @@ from .inference import generate
 from .data import YEAR_TOKEN
 
 
+def _load_wordlist(wordlist_file):
+    """Load wordlist robustly across common encodings used by public lists."""
+    try:
+        with open(wordlist_file, 'r', encoding='utf-8') as f:
+            return [line.strip() for line in f]
+    except UnicodeDecodeError:
+        # Some community wordlists are latin-1/cp1252 encoded.
+        with open(wordlist_file, 'r', encoding='latin-1', errors='ignore') as f:
+            return [line.strip() for line in f]
+
+
 def breadth_first_attack(wordlist_file, root, request_limit=100000):
     """
     Breadth-first directory attack baseline.
@@ -25,8 +36,7 @@ def breadth_first_attack(wordlist_file, root, request_limit=100000):
     Returns:
         tuple: (requests_list, successful_list, failed_list, time)
     """
-    with open(wordlist_file, 'r') as f:
-        wordlist = [line.strip() for line in f]
+    wordlist = _load_wordlist(wordlist_file)
     
     total_requests = 0
     successful_responses = 0
@@ -87,8 +97,7 @@ def depth_first_attack(wordlist_file, root, request_limit=100000):
     Returns:
         tuple: (requests_list, successful_list, failed_list, time)
     """
-    with open(wordlist_file, 'r') as f:
-        wordlist = [line.strip() for line in f]
+    wordlist = _load_wordlist(wordlist_file)
     
     total_requests = 0
     successful_responses = 0
@@ -153,8 +162,7 @@ def probabilistic_attack(train_root, test_root, wordlist_file, request_limit=100
     Returns:
         tuple: (requests_list, successful_list, failed_list, time)
     """
-    with open(wordlist_file, 'r') as f:
-        wordlist = [line.strip() for line in f]
+    wordlist = _load_wordlist(wordlist_file)
 
     total_requests = 0
     successful_responses = 0
