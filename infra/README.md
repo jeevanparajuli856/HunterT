@@ -135,7 +135,7 @@ Create bucket (one time):
 
 ```bash
 cd infra
-BUCKET_NAME=dirhunter-t-ltsm-artifacts ./create_storage.sh
+BUCKET_NAME=dir-huntert-ltsm ./create_storage.sh
 ```
 
 Run training with periodic sync:

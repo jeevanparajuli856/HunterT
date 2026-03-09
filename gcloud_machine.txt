@@ -1,0 +1,3 @@
+ltsm-t4-vm  compute.v1.instance  COMPLETED
+gs://dir-huntert-ltsm
+ltsm = passphrase
