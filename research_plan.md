@@ -101,51 +101,6 @@ For IEEE submission, we claim **5 distinct contributions** in the intro:
 
 ```python
 class DirHunterT(nn.Module):
-    def __init__(self, vocab_size, d_model=256, n_layers=4, n_heads=8):
-
-        # BPE Token Embedding
-        # Fixes their UNK problem. Rare dirs decompose into subwords.
-        # "/wp-admin" -> ["wp", "admin"] instead of UNK
-        self.token_embedding = nn.Embedding(vocab_size, d_model)
-
-        # Depth-Aware Positional Encoding (replaces RoPE)
-        # URLs are trees not sequences. Depth matters more than order.
-        # /news/2024/january: "2024" gets depth-2 signal not position-2 signal
-        self.depth_embedding = nn.Embedding(20, d_model)
-        self.depth_decay = nn.Parameter(torch.ones(1))
-
-        # Segment-Type Embedding
-        # 8 learned structural categories the model discovers automatically:
-        #   temporal (2024, january, q3) -> predict more temporal children
-        #   api (/api, /v1, /endpoint)   -> predict more versioned children
-        #   auth (/admin, /login)        -> predict more auth children
-        #   content, static, media, admin, other
-        self.segment_embedding = nn.Embedding(8, d_model)
-
-        # Decoder-Only Transformer
-        # Full lossless attention over entire path.
-        # At depth 6, still has full access to depth-1 directory.
-        # LSTM at depth 6 has mostly forgotten depth-1.
-        decoder_layer = nn.TransformerDecoderLayer(
-            d_model=d_model, nhead=n_heads, dropout=0.2
-        )
-        self.transformer = nn.TransformerDecoder(decoder_layer, n_layers)
-        self.fc_out = nn.Linear(d_model, vocab_size)
-
-    def forward(self, tokens, depths, segment_types):
-        x = (self.token_embedding(tokens)
-           + self.depth_embedding(depths)
-           + self.segment_embedding(segment_types))
-
-        depth_bias = self.compute_depth_bias(depths)
-        out = self.transformer(x, attn_mask=depth_bias)
-        return F.softmax(self.fc_out(out), dim=-1)
-
-    def compute_depth_bias(self, depths):
-        # Children attend strongly to parents, weakly to grandparents
-        # Siblings attend equally to each other
-        depth_diff = depths.unsqueeze(1) - depths.unsqueeze(2)
-        return -self.depth_decay * depth_diff.abs()
 ```
 
 **Hyperparameter search grid:**

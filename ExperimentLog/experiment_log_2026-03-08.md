@@ -235,3 +235,10 @@ Documented complete experiment execution flow:
 **Date**: March 8, 2026  
 **Session Duration**: Full day  
 **Session Focus**: Production readiness and methodology verification
+
+
+
+“We reproduced using the provided historical dataset without filtering domains by current availability.”
+“A live check in 2026 found 12 domains currently unreachable; this reflects temporal web drift.”
+“This drift may affect any real-world/live interpretation, but does not change offline reproduction protocol.”
+“As a sensitivity check, future work can re-run with dead domains excluded and compare deltas.”
