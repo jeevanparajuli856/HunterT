@@ -62,11 +62,7 @@ Trains 3 models × 3 epochs (~25-30 minutes):
 
 ```bash
 python main.py train \
-  --max-depth-values 5 \
-  --min-freq-values 3 \
-  --embedding-sizes 128 \
-  --n-layers-values 2 \
-  --dropout-values 0.2 0.3 0.4 \
+  --smoke-test \
   --epochs 3 \
   --resume \
   --progress-file ./saved_models/train_progress_test.json \
@@ -78,9 +74,7 @@ Then evaluate with limited sweep:
 ```bash
 python main.py evaluate \
   --wordlist-file ../LTSM_Research/chosen_wordlists/big_wfuzz.txt \
-  --prediction-sweep 100 500 1000 \
-  --results-file ./results/eval_results_test.csv \
-  --best-models-file ./results/eval_results_best_by_model_test.csv
+  --prediction-sweep 100 500 1000
 ```
 
 Verify outputs:
@@ -113,7 +107,7 @@ python main.py train \
 You can also set sync command via env var:
 
 ```bash
-export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://YOUR_BUCKET/ltsm/saved_models'
+export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-ltsm/ltsm/saved_models'
 python main.py train --resume
 ```
 
@@ -159,7 +153,7 @@ In a second tmux pane/session:
 ```bash
 cd ~/HunterT/ltsm_pipeline
 chmod +x preempt_watch.sh
-export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://YOUR_BUCKET/ltsm/saved_models && gsutil -m rsync -r ./results gs://YOUR_BUCKET/ltsm/results'
+export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-ltsm/ltsm/saved_models && gsutil -m rsync -r ./results gs://dir-huntert-ltsm/ltsm/results'
 ./preempt_watch.sh
 ```
 
