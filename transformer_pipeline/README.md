@@ -153,7 +153,7 @@ cd ~/HunterT/infra
 ### Step 2 — SSH into the VM
 
 ```bash
-gcloud compute ssh ltsm-t4-vm --zone us-central1-a --project YOUR_PROJECT_ID
+gcloud compute ssh ltsm-t4-vm --zone us-central1-a --project dirhunter-t
 ```
 
 ### Step 3 — Set up environment on VM
@@ -220,7 +220,7 @@ cd ~/HunterT/infra
 
 **2. SSH into new VM:**
 ```bash
-gcloud compute ssh ltsm-t4-vm --zone us-central1-a --project YOUR_PROJECT_ID
+gcloud compute ssh ltsm-t4-vm --zone us-central1-a --project dirhunter-t
 ```
 
 **3. Restore Python environment:**
