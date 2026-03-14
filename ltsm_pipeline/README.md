@@ -29,15 +29,15 @@ Create a bucket once from the infra folder:
 
 ```bash
 cd ../infra
-BUCKET_NAME=dirhunter-t-ltsm-artifacts ./create_storage.sh
+BUCKET_NAME=dir-huntert-ltsm ./create_storage.sh
 ```
 
 On a fresh Spot VM, restore artifacts before resuming:
 
 ```bash
 cd ../ltsm_pipeline
-gsutil -m rsync -r gs://dirhunter-t-ltsm-artifacts/ltsm/saved_models ./saved_models
-gsutil -m rsync -r gs://dirhunter-t-ltsm-artifacts/ltsm/results ./results
+gsutil -m rsync -r gs://dir-huntert-ltsm/ltsm/saved_models ./saved_models
+gsutil -m rsync -r gs://dir-huntert-ltsm/ltsm/results ./results
 ```
 
 ## 1) Smoke Test (quick sanity - 2 minutes)

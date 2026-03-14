@@ -18,7 +18,7 @@ fi
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)}"
 DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-ltsm-t4}"
 ZONE="${ZONE:-us-central1-a}"
-MACHINE_TYPE="${MACHINE_TYPE:-n1-standard-8}"
+MACHINE_TYPE="${MACHINE_TYPE:-n1-standard-16}"
 DISK_SIZE_GB="${DISK_SIZE_GB:-200}"
 
 if [[ -z "${PROJECT_ID}" ]]; then

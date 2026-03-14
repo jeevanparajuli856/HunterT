@@ -1,7 +1,7 @@
 # DirHunterT Transformer Pipeline
 
 DirHunterT-A: decoder-only transformer for directory enumeration.
-Runs on the **same GCP Spot T4 infrastructure** as the LSTM pipeline.
+Runs on the **same GCP Spot V100 infrastructure** as the LSTM pipeline.
 
 Grid search: **64 model combinations** (vs LSTM's 108).
 Produces **4 best models** — one per `(max_depth, min_freq)` global pair — for direct comparison with LSTM.
@@ -48,7 +48,7 @@ If bucket does not exist yet (first time):
 
 ```bash
 cd ~/HunterT/infra
-BUCKET_NAME=dirhuntert-transformer ./create_storage.sh
+BUCKET_NAME=dir-huntert-transformer ./create_storage.sh
 ```
 
 ---
@@ -86,14 +86,14 @@ python main.py train \
   --resume \
   --progress-file ./saved_models/train_progress.json \
   --checkpoint-dir ./saved_models/checkpoints \
-  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-transformer/transformer/saved_models" \
+  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dir-huntert-transformer/transformer/saved_models" \
   --sync-every-n 1
 ```
 
 Or set the sync command as an environment variable:
 
 ```bash
-export TRANSFORMER_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dirhunter-t-transformer/transformer/saved_models'
+export TRANSFORMER_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-transformer/transformer/saved_models'
 python main.py train --resume
 ```
 
@@ -168,17 +168,17 @@ GATE PASSED — proceed to Model B
 
 ## Running on Spot VM (Full Workflow)
 
-### Step 1 — Create the VM (same infra as LSTM)
+### Step 1 — Create the VM (V100 Spot infra)
 
 ```bash
-cd ~/HunterT/infra
+cd ~/HunterT/infra_T
 ./create_infra.sh
 ```
 
 ### Step 2 — SSH into the VM
 
 ```bash
-gcloud compute ssh ltsm-t4-vm-transformer --zone us-central1-a --project dirhunter-t
+gcloud compute ssh ltsm-v100-vm-transformer --zone us-central1-a --project dirhunter-t
 ```
 
 ### Step 3 — Set up environment on VM
@@ -239,13 +239,13 @@ If the VM is preempted, follow this exact sequence.
 
 **1. Recreate VM:**
 ```bash
-cd ~/HunterT/infra
+cd ~/HunterT/infra_T
 ./create_infra.sh
 ```
 
 **2. SSH into new VM:**
 ```bash
-gcloud compute ssh ltsm-t4-vm-transformer --zone us-central1-a --project dirhunter-t
+gcloud compute ssh ltsm-v100-vm-transformer --zone us-central1-a --project dirhunter-t
 ```
 
 **3. Restore Python environment:**
@@ -276,12 +276,13 @@ python main.py train \
 
 ## Cost and Time Estimates
 
-| Phase | Duration | Cost (Spot T4) |
-|-------|----------|----------------|
-| Smoke test | ~2 min | ~$0.01 |
-| Full training (64 models) | 5–15 hours | ~$5–12 |
-| Evaluation (119 domains) | 2–6 hours | ~$2–5 |
-| **Total** | **~7–21 hours** | **~$7–17** |
+
+| Phase | Duration | Cost (Spot V100) |
+|-------|----------|------------------|
+| Smoke test | ~2 min | ~$0.02 |
+| Full training (64 models) | 5–15 hours | ~$15–30 |
+| Evaluation (119 domains) | 2–6 hours | ~$5–10 |
+| **Total** | **~7–21 hours** | **~$20–40** |
 
 Transformer training is faster per model than LSTM (no truncated BPTT, GPU-parallel attention).
 

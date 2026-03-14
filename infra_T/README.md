@@ -1,6 +1,6 @@
 # GCP Infra (YAML-based)
 
-This folder contains a simple Google Cloud Deployment Manager setup to create and destroy a Spot T4 VM for LTSM and Transformer training and benchmarks.
+This folder contains a simple Google Cloud Deployment Manager setup to create and destroy a Spot V100 VM for LTSM and Transformer training and benchmarks.
 
 ## Files
 
@@ -27,12 +27,13 @@ gcloud config set project YOUR_PROJECT_ID
 ```
 
 
-2. Create Spot instance for Transformer (recommended):
+
+2. Create Spot V100 instance for Transformer (recommended):
 
 ```bash
 cd infra_T
 chmod +x create_infra.sh destroy_infra.sh
-DEPLOYMENT_NAME=ltsm-t4-transformer ./create_infra.sh
+DEPLOYMENT_NAME=ltsm-v100-transformer ./create_infra.sh
 ```
 
 Optional: create storage bucket (recommended for Spot interruptions):
@@ -42,18 +43,20 @@ cd infra_T
 BUCKET_NAME=your-globally-unique-bucket ./create_storage.sh
 ```
 
+
 Defaults used by script:
 
-- `DEPLOYMENT_NAME=ltsm-t4-transformer`
+- `DEPLOYMENT_NAME=ltsm-v100-transformer`
 - `ZONE=us-central1-a`
-- `MACHINE_TYPE=n1-standard-8`
+- `MACHINE_TYPE=n1-standard-16`
 - `DISK_SIZE_GB=200`
+
 
 
 3. Connect to Spot VM:
 
 ```bash
-gcloud compute ssh ltsm-t4-vm-transformer --zone us-central1-a --project YOUR_PROJECT_ID
+gcloud compute ssh ltsm-v100-vm-transformer --zone us-central1-a --project YOUR_PROJECT_ID
 ```
 
 4. Setup on the Spot VM:
@@ -102,24 +105,26 @@ BUCKET_NAME=your-globally-unique-bucket ./destroy_storage.sh
 ## Custom Configuration
 
 
+
 Override defaults via environment variables:
 
 ```bash
 cd infra_T
 PROJECT_ID=your-project-id \
-DEPLOYMENT_NAME=ltsm-t4-transformer \
+DEPLOYMENT_NAME=ltsm-v100-transformer \
 ZONE=us-central1-a \
-MACHINE_TYPE=n1-standard-8 \
+MACHINE_TYPE=n1-standard-16 \
 DISK_SIZE_GB=200 \
 ./create_infra.sh
 ```
+
 
 
 Destroy a custom deployment:
 
 ```bash
 cd infra_T
-PROJECT_ID=your-project-id DEPLOYMENT_NAME=ltsm-t4-transformer ./destroy_infra.sh
+PROJECT_ID=your-project-id DEPLOYMENT_NAME=ltsm-v100-transformer ./destroy_infra.sh
 ```
 
 ## Running on Spot Instances
@@ -167,18 +172,18 @@ gsutil -m rsync -r gs://dir-huntert-ltsm/ltsm/results ./results
 If the Spot VM is preempted, run this exact sequence.
 
 
+
 1. Recreate infrastructure:
 
 ```bash
 cd /home/jeevan/HunterT/infra_T
-DEPLOYMENT_NAME=ltsm-t4-transformer ./create_infra.sh
+DEPLOYMENT_NAME=ltsm-v100-transformer ./create_infra.sh
 ```
-
 
 2. Connect to the new VM:
 
 ```bash
-gcloud compute ssh ltsm-t4-vm-transformer --zone us-central1-a --project YOUR_PROJECT_ID
+gcloud compute ssh ltsm-v100-vm-transformer --zone us-central1-a --project YOUR_PROJECT_ID
 ```
 
 3. Recreate Python environment:
@@ -221,8 +226,9 @@ tmux new -s ltsm
 
 ## Notes
 
-- VM is created as Spot (`preemptible`) with `nvidia-tesla-t4` accelerator.
+- VM is created as Spot (`preemptible`) with `nvidia-tesla-v100` accelerator.
 - Startup script installs base tools and attempts NVIDIA driver installation.
 - If Spot capacity is unavailable in your zone, switch `ZONE` and retry.
 - Deployment Manager is used because you asked for YAML-based easy create/destroy flow.
 - Spot instances can be preempted at any time - use resume mode and sync to GCS.
+- V100 Spot is faster and more expensive than T4 Spot (see transformer_pipeline/README.md for updated cost estimates).
