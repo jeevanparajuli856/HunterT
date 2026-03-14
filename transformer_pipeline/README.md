@@ -48,7 +48,7 @@ If bucket does not exist yet (first time):
 
 ```bash
 cd ~/HunterT/infra
-BUCKET_NAME=dirhunter-t-ltsm-artifacts ./create_storage.sh
+BUCKET_NAME=dirhuntert-transformer ./create_storage.sh
 ```
 
 ---
@@ -86,14 +86,14 @@ python main.py train \
   --resume \
   --progress-file ./saved_models/train_progress.json \
   --checkpoint-dir ./saved_models/checkpoints \
-  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-ltsm/transformer/saved_models" \
+  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-transformer/transformer/saved_models" \
   --sync-every-n 1
 ```
 
 Or set the sync command as an environment variable:
 
 ```bash
-export TRANSFORMER_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dirhunter-t-ltsm/transformer/saved_models'
+export TRANSFORMER_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dirhunter-t-transformer/transformer/saved_models'
 python main.py train --resume
 ```
 
@@ -178,7 +178,7 @@ cd ~/HunterT/infra
 ### Step 2 — SSH into the VM
 
 ```bash
-gcloud compute ssh ltsm-t4-vm --zone us-central1-a --project dirhunter-t
+gcloud compute ssh ltsm-t4-vm-transformer --zone us-central1-a --project dirhunter-t
 ```
 
 ### Step 3 — Set up environment on VM
@@ -198,7 +198,7 @@ nvidia-smi
 
 ```bash
 cd ~/HunterT/transformer_pipeline
-gsutil -m rsync -r gs://dirhunter-t-ltsm/transformer/saved_models ./saved_models
+gsutil -m rsync -r gs://dirhunter-t-transformer/transformer/saved_models ./saved_models
 ```
 
 ### Step 5 — Start tmux and run training
@@ -211,7 +211,7 @@ python main.py train \
   --data-folder ../LTSM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
   --resume \
-  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-ltsm/transformer/saved_models" \
+  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-transformer/transformer/saved_models" \
   --sync-every-n 1
 
 # Detach:  Ctrl+B then D
@@ -225,7 +225,7 @@ Reuses the same `preempt_watch.sh` from the LSTM pipeline.
 ```bash
 # In a second tmux pane (Ctrl+B then %)
 cd ~/HunterT/ltsm_pipeline
-export SYNC_CMD='gsutil -m rsync -r ../transformer_pipeline/saved_models gs://dirhunter-t-ltsm/transformer/saved_models'
+export SYNC_CMD='gsutil -m rsync -r ../transformer_pipeline/saved_models gs://dirhunter-t-transformer/transformer/saved_models'
 ./preempt_watch.sh
 ```
 
@@ -245,7 +245,7 @@ cd ~/HunterT/infra
 
 **2. SSH into new VM:**
 ```bash
-gcloud compute ssh ltsm-t4-vm --zone us-central1-a --project dirhunter-t
+gcloud compute ssh ltsm-t4-vm-transformer --zone us-central1-a --project dirhunter-t
 ```
 
 **3. Restore Python environment:**
@@ -259,7 +259,7 @@ pip install -r ../requirements.txt
 **4. Restore transformer artifacts from GCS:**
 ```bash
 cd ~/HunterT/transformer_pipeline
-gsutil -m rsync -r gs://dirhunter-t-ltsm/transformer/saved_models ./saved_models
+gsutil -m rsync -r gs://dirhunter-t-transformer/transformer/saved_models ./saved_models
 ```
 
 **5. Resume training — completed combos are skipped automatically:**
@@ -268,7 +268,7 @@ python main.py train \
   --data-folder ../LTSM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
   --resume \
-  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-ltsm/transformer/saved_models" \
+  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-transformer/transformer/saved_models" \
   --sync-every-n 1
 ```
 
