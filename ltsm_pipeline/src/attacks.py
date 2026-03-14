@@ -19,6 +19,7 @@ def _load_wordlist(wordlist_file):
         with open(wordlist_file, 'r', encoding='utf-8') as f:
             return [line.strip() for line in f]
     except UnicodeDecodeError:
+        print(f"[WARNING] Failed to decode {wordlist_file} with utf-8. Retrying with latin-1 and ignoring errors.")
         # Some community wordlists are latin-1/cp1252 encoded.
         with open(wordlist_file, 'r', encoding='latin-1', errors='ignore') as f:
             return [line.strip() for line in f]
