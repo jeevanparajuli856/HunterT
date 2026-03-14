@@ -154,8 +154,8 @@ Restore artifacts on a new Spot VM after preemption:
 
 ```bash
 cd ~/HunterT/ltsm_pipeline
-gsutil -m rsync -r gs://dirhunter-t-ltsm-artifacts/ltsm/saved_models ./saved_models
-gsutil -m rsync -r gs://dirhunter-t-ltsm-artifacts/ltsm/results ./results
+gsutil -m rsync -r gs://dir-huntert-ltsm/ltsm/saved_models ./saved_models
+gsutil -m rsync -r gs://dir-huntert-ltsm/ltsm/results ./results
 ```
 
 ## Spot Recovery Runbook
