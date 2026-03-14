@@ -130,13 +130,38 @@ results/eval_results_transformer_best.csv  — best prediction_limit per domain/
 
 ## 4) Compare Transformer vs LSTM Results
 
-After both LSTM and transformer evaluations are done, run the LSTM plot script — it reads any eval CSV and generates paper-style tables.
+After both LSTM and transformer evaluations are done, run the LSTM plot script with both CSVs. It generates all existing LSTM tables **plus** two new comparison tables.
 
 ```bash
 cd ~/HunterT/ltsm_pipeline
 python plot_tables.py \
-  --lstm-results   ../ltsm_pipeline/results/eval_results.csv \
-  --transformer-results ../transformer_pipeline/results/eval_results_transformer_best.csv
+  --results-csv ./results/eval_results.csv \
+  --transformer-results ../transformer_pipeline/results/eval_results_transformer_best.csv \
+  --output-dir ./results/figures
+```
+
+New outputs produced when `--transformer-results` is given:
+
+```
+results/figures/table_lstm_vs_transformer.png   — BF Baseline | LSTM | DirHunterT-A | Gain %
+results/figures/table_gate_check.png            — PASS/FAIL per sector (>30% over LSTM)
+```
+
+The gate check result is also printed to the terminal immediately:
+
+```
+==================================================
+GATE CHECK RESULT
+==================================================
+    Sector  LSTM hits  DirHunterT-A  Gain %  Gate >30%
+University      90.0         130.0  +44.4%    PASS ✓
+ Hospitals     175.0         240.0  +37.1%    PASS ✓
+ Companies      89.0         120.0  +34.8%    PASS ✓
+Government     128.0         175.0  +36.7%    PASS ✓
+ALL (mean)     120.5         166.3  +38.0%    PASS ✓
+==================================================
+GATE PASSED — proceed to Model B
+==================================================
 ```
 
 ---

@@ -262,9 +262,139 @@ def build_sweep_table(eval_df: pd.DataFrame, sweep_values: List[int]) -> pd.Data
     return agg
 
 
+GATE_THRESHOLD_PCT = 30.0   # DirHunterT-A must beat LSTM by at least this %
+
+
+def _best_lm_by_sector(eval_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Return mean successful_responses per sector for the best LM run per domain.
+    Works for both LSTM and transformer eval CSVs (same column names).
+    """
+    df = eval_df.copy()
+    if 'domain_type' not in df.columns:
+        df['domain_type'] = df['domain'].map(_domain_label)
+    df['domain_type'] = df['domain_type'].map(_normalize_domain_type)
+
+    lm = df[df['model_file'] != 'baseline'].copy()
+    if lm.empty:
+        raise ValueError('No LM/transformer rows found in CSV.')
+
+    best_per_domain = (
+        lm.sort_values('successful_responses', ascending=False)
+          .groupby('domain', as_index=False)
+          .first()
+    )
+    return (
+        best_per_domain
+        .groupby('domain_type', as_index=False)['successful_responses']
+        .mean()
+    )
+
+
+def _baseline_by_sector(eval_df: pd.DataFrame) -> pd.DataFrame:
+    """Return mean breadth-first baseline per sector."""
+    df = eval_df.copy()
+    if 'domain_type' not in df.columns:
+        df['domain_type'] = df['domain'].map(_domain_label)
+    df['domain_type'] = df['domain_type'].map(_normalize_domain_type)
+
+    bf = df[(df['approach'] == 'breadth_first') & (df['model_file'] == 'baseline')]
+    return bf.groupby('domain_type', as_index=False)['successful_responses'].mean()
+
+
+def build_lstm_vs_transformer_table(lstm_df: pd.DataFrame,
+                                    transformer_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Side-by-side sector comparison: BF Baseline | LSTM | DirHunterT-A | Improvement %.
+
+    This is the primary paper table for Model A vs LSTM comparison.
+    Averages are over test domains in each sector.
+    """
+    SECTORS = ['University', 'Hospitals', 'Companies', 'Government']
+
+    bf   = _baseline_by_sector(lstm_df).set_index('domain_type')['successful_responses']
+    lstm = _best_lm_by_sector(lstm_df).set_index('domain_type')['successful_responses']
+    tfm  = _best_lm_by_sector(transformer_df).set_index('domain_type')['successful_responses']
+
+    rows = []
+    for sector in SECTORS:
+        bf_val   = bf.get(sector, 0.0)
+        lstm_val = lstm.get(sector, 0.0)
+        tfm_val  = tfm.get(sector, 0.0)
+        imp_vs_lstm = ((tfm_val - lstm_val) / max(lstm_val, 1)) * 100
+        rows.append({
+            'Sector':            sector,
+            'BF Baseline':       f"{bf_val:.1f}",
+            'LSTM':              f"{lstm_val:.1f}",
+            'DirHunterT-A':      f"{tfm_val:.1f}",
+            'A vs LSTM':         f"{imp_vs_lstm:+.1f}%",
+        })
+
+    # ALL row — mean across sectors with available data
+    bf_mean   = sum(float(r['BF Baseline'])  for r in rows) / len(rows)
+    lstm_mean = sum(float(r['LSTM'])         for r in rows) / len(rows)
+    tfm_mean  = sum(float(r['DirHunterT-A']) for r in rows) / len(rows)
+    all_imp   = ((tfm_mean - lstm_mean) / max(lstm_mean, 1)) * 100
+    rows.append({
+        'Sector':       'ALL (mean)',
+        'BF Baseline':  f"{bf_mean:.1f}",
+        'LSTM':         f"{lstm_mean:.1f}",
+        'DirHunterT-A': f"{tfm_mean:.1f}",
+        'A vs LSTM':    f"{all_imp:+.1f}%",
+    })
+
+    return pd.DataFrame(rows)
+
+
+def build_gate_check_table(lstm_df: pd.DataFrame,
+                           transformer_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Gate check table: did DirHunterT-A beat LSTM by >30% in each sector?
+
+    Columns: Sector | LSTM hits | DirHunterT-A hits | Gain % | Gate (PASS/FAIL)
+    """
+    SECTORS = ['University', 'Hospitals', 'Companies', 'Government']
+
+    lstm = _best_lm_by_sector(lstm_df).set_index('domain_type')['successful_responses']
+    tfm  = _best_lm_by_sector(transformer_df).set_index('domain_type')['successful_responses']
+
+    rows = []
+    all_pass = True
+    for sector in SECTORS:
+        lstm_val = lstm.get(sector, 0.0)
+        tfm_val  = tfm.get(sector, 0.0)
+        gain_pct = ((tfm_val - lstm_val) / max(lstm_val, 1)) * 100
+        passed   = gain_pct >= GATE_THRESHOLD_PCT
+        all_pass = all_pass and passed
+        rows.append({
+            'Sector':        sector,
+            'LSTM hits':     f"{lstm_val:.1f}",
+            'DirHunterT-A':  f"{tfm_val:.1f}",
+            'Gain %':        f"{gain_pct:+.1f}%",
+            f'Gate >{GATE_THRESHOLD_PCT:.0f}%': 'PASS ✓' if passed else 'FAIL ✗',
+        })
+
+    lstm_mean = sum(float(r['LSTM hits'])     for r in rows) / len(rows)
+    tfm_mean  = sum(float(r['DirHunterT-A']) for r in rows) / len(rows)
+    all_gain  = ((tfm_mean - lstm_mean) / max(lstm_mean, 1)) * 100
+    rows.append({
+        'Sector':        'ALL (mean)',
+        'LSTM hits':     f"{lstm_mean:.1f}",
+        'DirHunterT-A':  f"{tfm_mean:.1f}",
+        'Gain %':        f"{all_gain:+.1f}%",
+        f'Gate >{GATE_THRESHOLD_PCT:.0f}%': 'PASS ✓' if all_pass else 'PARTIAL',
+    })
+
+    return pd.DataFrame(rows)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description='Generate table images from eval CSV outputs.')
-    parser.add_argument('--results-csv', default='./results/eval_results.csv', help='Path to eval_results.csv')
+    parser.add_argument('--results-csv', default='./results/eval_results.csv',
+                        help='Path to LSTM eval_results.csv')
+    parser.add_argument('--transformer-results', default=None,
+                        help='Path to transformer eval_results_transformer_best.csv. '
+                             'When provided, generates LSTM vs DirHunterT-A comparison tables.')
     parser.add_argument('--output-dir', default='./results/figures', help='Directory to save PNG table images')
     parser.add_argument('--sweep', nargs='+', type=int, default=DEFAULT_SWEEP,
                         help='Prediction limits to include in sweep table')
@@ -278,45 +408,73 @@ def main() -> None:
     os.makedirs(args.output_dir, exist_ok=True)
     eval_df = pd.read_csv(args.results_csv)
 
-    # Summary table image (closest to paper-ready comparison)
-    summary_df = build_summary_table(eval_df)
-    summary_png = os.path.join(args.output_dir, 'table_summary_baseline_vs_lm.png')
-    _save_table_image(summary_df, 'Baseline vs Best LSTM by Domain', summary_png)
+    saved = []
 
-    # Sweep-effect table image (topPredicts analysis)
-    sweep_df = build_sweep_table(eval_df, args.sweep)
-    sweep_png = os.path.join(args.output_dir, 'table_toppredicts_sweep.png')
-    _save_table_image(sweep_df, 'topPredicts Sweep (Mean Across Runs)', sweep_png)
+    def _save(df, title, stem):
+        png = os.path.join(args.output_dir, f'{stem}.png')
+        csv = os.path.join(args.output_dir, f'{stem}.csv')
+        _save_table_image(df, title, png)
+        df.to_csv(csv, index=False)
+        saved.extend([png, csv])
 
-    # All-approaches table image (BF/DF/Prob/Best-LM)
-    all_df = build_all_approaches_table(eval_df)
-    all_png = os.path.join(args.output_dir, 'table_all_approaches_by_domain.png')
-    _save_table_image(all_df, 'All Approaches by Domain', all_png)
+    # ---- LSTM-only tables (unchanged from original) ----
 
-    # Paper-style 4-approach summary table.
-    paper_df = build_paper_four_approaches_table(eval_df)
-    paper_png = os.path.join(args.output_dir, 'table_paper_four_approaches.png')
-    _save_table_image(paper_df, 'Overall Performance (4 Approaches)', paper_png)
+    _save(build_summary_table(eval_df),
+          'Baseline vs Best LSTM by Domain',
+          'table_summary_baseline_vs_lm')
 
-    # Save the rendered dataframes too for auditability
-    summary_csv = os.path.join(args.output_dir, 'table_summary_baseline_vs_lm.csv')
-    sweep_csv = os.path.join(args.output_dir, 'table_toppredicts_sweep.csv')
-    all_csv = os.path.join(args.output_dir, 'table_all_approaches_by_domain.csv')
-    paper_csv = os.path.join(args.output_dir, 'table_paper_four_approaches.csv')
-    summary_df.to_csv(summary_csv, index=False)
-    sweep_df.to_csv(sweep_csv, index=False)
-    all_df.to_csv(all_csv, index=False)
-    paper_df.to_csv(paper_csv, index=False)
+    _save(build_sweep_table(eval_df, args.sweep),
+          'topPredicts Sweep (Mean Across Runs)',
+          'table_toppredicts_sweep')
 
-    print('Saved table images and CSVs:')
-    print(f'  - {summary_png}')
-    print(f'  - {sweep_png}')
-    print(f'  - {all_png}')
-    print(f'  - {paper_png}')
-    print(f'  - {summary_csv}')
-    print(f'  - {sweep_csv}')
-    print(f'  - {all_csv}')
-    print(f'  - {paper_csv}')
+    _save(build_all_approaches_table(eval_df),
+          'All Approaches by Domain',
+          'table_all_approaches_by_domain')
+
+    _save(build_paper_four_approaches_table(eval_df),
+          'Overall Performance (4 Approaches)',
+          'table_paper_four_approaches')
+
+    # ---- LSTM vs DirHunterT-A comparison tables (when --transformer-results given) ----
+
+    if args.transformer_results:
+        if not os.path.exists(args.transformer_results):
+            raise FileNotFoundError(
+                f"Transformer results CSV not found at {args.transformer_results}. "
+                "Run `python main.py evaluate` inside transformer_pipeline/ first."
+            )
+        transformer_df = pd.read_csv(args.transformer_results)
+
+        _save(build_lstm_vs_transformer_table(eval_df, transformer_df),
+              'LSTM vs DirHunterT-A — Sector Comparison',
+              'table_lstm_vs_transformer')
+
+        gate_df = build_gate_check_table(eval_df, transformer_df)
+        _save(gate_df, f'DirHunterT-A Gate Check (>{GATE_THRESHOLD_PCT:.0f}% over LSTM)',
+              'table_gate_check')
+
+        # Print gate result to terminal so it's immediately visible
+        gate_col = f'Gate >{GATE_THRESHOLD_PCT:.0f}%'
+        print('\n' + '=' * 50)
+        print('GATE CHECK RESULT')
+        print('=' * 50)
+        print(gate_df[[c for c in gate_df.columns]].to_string(index=False))
+        all_row = gate_df[gate_df['Sector'] == 'ALL (mean)'][gate_col].values[0]
+        print('=' * 50)
+        if 'FAIL' not in all_row:
+            print('GATE PASSED — proceed to Model B')
+        else:
+            sector_fails = gate_df[
+                (gate_df['Sector'] != 'ALL (mean)') &
+                (gate_df[gate_col].str.contains('FAIL'))
+            ]['Sector'].tolist()
+            print(f'GATE FAILED in: {sector_fails}')
+            print('Debug architecture before starting Model B.')
+        print('=' * 50 + '\n')
+
+    print('Saved:')
+    for path in saved:
+        print(f'  {path}')
 
 
 if __name__ == '__main__':
