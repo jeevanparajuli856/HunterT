@@ -13,7 +13,7 @@ resources:
       instanceTerminationAction: STOP
 
     guestAccelerators:
-    - acceleratorType: zones/${ZONE}/acceleratorTypes/nvidia-l4
+    - acceleratorType: zones/${ZONE}/acceleratorTypes/nvidia-tesla-t4
       acceleratorCount: 1
 
     disks:
@@ -24,9 +24,10 @@ resources:
       initializeParams:
         diskSizeGb: ${DISK_SIZE_GB}
         diskType: zones/${ZONE}/diskTypes/pd-ssd
-        # Deep Learning VM — CUDA 11.8 + NVIDIA drivers pre-installed.
-        # Required for L4 (Ada Lovelace, compute capability 8.9).
-        sourceImage: projects/deeplearning-platform-release/global/images/family/pytorch-latest-gpu-ubuntu-2004-py310
+        # GCP Deep Learning VM — CUDA 12.8, NVIDIA driver 570, Ubuntu 22.04.
+        # Works for both L4 and T4 (cu121 torch wheels run on any driver >= 520).
+        # List available: gcloud compute images list --project deeplearning-platform-release --no-standard-images --format="value(family)" | grep pytorch
+        sourceImage: projects/deeplearning-platform-release/global/images/family/pytorch-2-7-cu128-ubuntu-2204-nvidia-570
 
     networkInterfaces:
     - network: global/networks/default

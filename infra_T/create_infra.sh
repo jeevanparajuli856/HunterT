@@ -16,9 +16,9 @@ if ! command -v envsubst >/dev/null 2>&1; then
 fi
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)}"
-DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-ltsm-l4-transformer}"
-ZONE="${ZONE:-us-central1-a}"
-MACHINE_TYPE="${MACHINE_TYPE:-g2-standard-4}"
+DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-ltsm-t4-transformer}"
+MACHINE_TYPE="${MACHINE_TYPE:-n1-standard-4}"
+GPU_TYPE="${GPU_TYPE:-nvidia-tesla-t4}"
 DISK_SIZE_GB="${DISK_SIZE_GB:-200}"
 
 if [[ -z "${PROJECT_ID}" ]]; then
@@ -26,17 +26,59 @@ if [[ -z "${PROJECT_ID}" ]]; then
   exit 1
 fi
 
-export DEPLOYMENT_NAME ZONE MACHINE_TYPE DISK_SIZE_GB
-envsubst < "${TEMPLATE_FILE}" > "${RENDERED_FILE}"
+# T4 Spot fallback zones — tried in order until one has capacity.
+if [[ -n "${ZONE:-}" ]]; then
+  ZONES=("${ZONE}")
+else
+  ZONES=(
+    us-central1-a
+    us-central1-b
+    us-east1-b
+    us-east1-c
+    us-east4-b
+    europe-west4-b
+    asia-southeast1-b
+  )
+fi
 
-echo "Creating deployment ${DEPLOYMENT_NAME} in project ${PROJECT_ID}..."
-gcloud deployment-manager deployments create "${DEPLOYMENT_NAME}" \
-  --config "${RENDERED_FILE}" \
-  --project "${PROJECT_ID}"
+export DEPLOYMENT_NAME MACHINE_TYPE GPU_TYPE DISK_SIZE_GB
+
+for ZONE in "${ZONES[@]}"; do
+  echo "Trying T4 Spot in ${ZONE}..."
+  export ZONE
+  envsubst < "${TEMPLATE_FILE}" > "${RENDERED_FILE}"
+
+  # Clean up any previous failed deployment
+  if gcloud deployment-manager deployments describe "${DEPLOYMENT_NAME}" \
+       --project "${PROJECT_ID}" &>/dev/null; then
+    gcloud deployment-manager deployments delete "${DEPLOYMENT_NAME}" \
+      --project "${PROJECT_ID}" --quiet 2>/dev/null || true
+  fi
+
+  if gcloud deployment-manager deployments create "${DEPLOYMENT_NAME}" \
+       --config "${RENDERED_FILE}" \
+       --project "${PROJECT_ID}" 2>&1 | tee /tmp/dm_create.log; then
+    echo ""
+    echo "VM created: T4 Spot in ${ZONE}"
+    echo ""
+    echo "SSH (wait ~2 min for startup script):"
+    echo "  gcloud compute ssh ${DEPLOYMENT_NAME}-vm --zone ${ZONE} --project ${PROJECT_ID}"
+    echo ""
+    echo "Destroy when done:  ./destroy_infra.sh"
+    exit 0
+  fi
+
+  if grep -qE "ZONE_RESOURCE_POOL_EXHAUSTED|QUOTA_EXCEEDED" /tmp/dm_create.log; then
+    echo "  No capacity in ${ZONE}, trying next..."
+    gcloud deployment-manager deployments delete "${DEPLOYMENT_NAME}" \
+      --project "${PROJECT_ID}" --quiet 2>/dev/null || true
+    continue
+  fi
+
+  echo "Unexpected error — see output above." >&2
+  exit 1
+done
 
 echo ""
-echo "SSH (wait ~2 min for startup script):"
-echo "  gcloud compute ssh ${DEPLOYMENT_NAME}-vm --zone ${ZONE} --project ${PROJECT_ID}"
-echo ""
-echo "Destroy when done:"
-echo "  ./destroy_infra.sh"
+echo "Error: No T4 Spot capacity found in any zone. Try again later." >&2
+exit 1

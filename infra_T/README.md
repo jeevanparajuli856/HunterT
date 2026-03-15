@@ -46,19 +46,29 @@ BUCKET_NAME=dirhuntert-transformer ./destroy_storage.sh
 ## VM
 
 ```bash
-# Create
+# Create — auto-tries fallback zones if L4 Spot is exhausted
 ./create_infra.sh
 
-# SSH in (wait ~2 min for startup script)
-gcloud compute ssh ltsm-l4-transformer-vm --zone us-central1-a --project dirhunter-t
+# Script prints the zone it succeeded in, e.g.:
+#   VM created in zone us-east1-b.
+#   gcloud compute ssh ltsm-l4-transformer-vm --zone us-east1-b --project dirhunter-t
 
 # Destroy
 ./destroy_infra.sh
 ```
 
-Defaults: `DEPLOYMENT_NAME=ltsm-l4-transformer`, `ZONE=us-central1-a`, `MACHINE_TYPE=g2-standard-4`, `DISK_SIZE_GB=200`.
+Auto-tries **L4 first**, falls back to **T4** if no L4 Spot capacity exists anywhere.
+Priority: `L4 (us-central1, us-east1, us-east4, europe-west4)` → `T4 (same + asia-southeast1)`.
 
-If L4 Spot capacity is unavailable, try: `ZONE=us-east1-c`, `ZONE=us-east4-c`, `ZONE=europe-west4-b`.
+Pin a specific GPU/zone:
+```bash
+ZONE=us-east1-b MACHINE_TYPE=n1-standard-4 GPU_TYPE=nvidia-tesla-t4 ./create_infra.sh
+```
+
+| GPU | Machine type | VRAM | Spot cost | Training time (96 models) |
+|-----|-------------|------|-----------|--------------------------|
+| L4  | g2-standard-4 | 24 GB | ~$0.40/hr | ~5–10 hrs |
+| T4  | n1-standard-4 | 16 GB | ~$0.12/hr | ~8–15 hrs |
 
 ---
 
@@ -105,7 +115,7 @@ python3 main.py train \
 ## Spot Recovery
 
 ```bash
-# 1. Recreate VM
+# 1. Recreate VM (auto-finds available zone)
 ./create_infra.sh
 
 # 2. SSH in and restore checkpoints

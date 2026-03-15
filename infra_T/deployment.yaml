@@ -1,9 +1,9 @@
 resources:
-- name: ltsm-L4-transformer-vm
+- name: ltsm-l4-transformer-vm
   type: compute.v1.instance
   properties:
-    zone: us-central1-a
-    machineType: zones/us-central1-a/machineTypes/g2-standard-4
+    zone: us-central1-b
+    machineType: zones/us-central1-b/machineTypes/g2-standard-4
 
     scheduling:
       provisioningModel: SPOT
@@ -13,7 +13,7 @@ resources:
       instanceTerminationAction: STOP
 
     guestAccelerators:
-    - acceleratorType: zones/us-central1-a/acceleratorTypes/nvidia-l4
+    - acceleratorType: zones/us-central1-b/acceleratorTypes/nvidia-l4
       acceleratorCount: 1
 
     disks:
@@ -23,8 +23,11 @@ resources:
       autoDelete: true
       initializeParams:
         diskSizeGb: 200
-        diskType: zones/us-central1-a/diskTypes/pd-balanced
-        sourceImage: projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts
+        diskType: zones/us-central1-b/diskTypes/pd-ssd
+        # GCP Deep Learning VM — CUDA 12.8, NVIDIA driver 570, Ubuntu 22.04.
+        # Works for both L4 and T4 (cu121 torch wheels run on any driver >= 520).
+        # List available: gcloud compute images list --project deeplearning-platform-release --no-standard-images --format="value(family)" | grep pytorch
+        sourceImage: projects/deeplearning-platform-release/global/images/family/pytorch-2-7-cu128-ubuntu-2204-nvidia-570
 
     networkInterfaces:
     - network: global/networks/default
@@ -44,15 +47,17 @@ resources:
 
     metadata:
       items:
+      - key: install-nvidia-driver
+        value: "True"
       - key: startup-script
         value: |
           #!/usr/bin/env bash
           set -euxo pipefail
           export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y git tmux htop python3-venv python3-pip ubuntu-drivers-common
 
-          # Install NVIDIA driver for L4 if not already present.
-          if ! command -v nvidia-smi >/dev/null 2>&1; then
-            ubuntu-drivers autoinstall || true
-          fi
+          apt-get update -qq
+          apt-get install -y --no-install-recommends git tmux htop gettext-base python3-venv
+
+          # Verify L4 GPU is visible (DLVM pre-installs drivers)
+          nvidia-smi || { echo "ERROR: GPU not visible"; exit 1; }
+          echo "VM ready. GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
