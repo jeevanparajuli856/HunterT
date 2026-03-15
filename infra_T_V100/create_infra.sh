@@ -31,8 +31,8 @@ if [[ -n "${ZONE:-}" ]]; then
   ZONES=("${ZONE}")
 else
   ZONES=(
-    us-central1-a
     us-central1-b
+    us-central1-a
     us-central1-c
     us-east1-c
     us-east1-d

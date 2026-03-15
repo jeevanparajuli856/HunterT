@@ -125,4 +125,4 @@ python3 main.py train --resume \
   --sync-every-n 1
 ```
 
-  gcloud compute config-ssh ltsm-t4-transformer-vm --zone us-central1-a --project dirhunter-t
+  gcloud compute config-ssh ltsm-v100-transformer-vm --zone us-central1-b --project dirhunter-t
