@@ -1,9 +1,9 @@
 resources:
-- name: ltsm-l4-transformer-vm
+- name: ltsm-t4-transformer-vm
   type: compute.v1.instance
   properties:
-    zone: us-central1-b
-    machineType: zones/us-central1-b/machineTypes/g2-standard-4
+    zone: us-central1-a
+    machineType: zones/us-central1-a/machineTypes/n1-standard-4
 
     scheduling:
       provisioningModel: SPOT
@@ -13,7 +13,7 @@ resources:
       instanceTerminationAction: STOP
 
     guestAccelerators:
-    - acceleratorType: zones/us-central1-b/acceleratorTypes/nvidia-l4
+    - acceleratorType: zones/us-central1-a/acceleratorTypes/nvidia-tesla-t4
       acceleratorCount: 1
 
     disks:
@@ -23,7 +23,7 @@ resources:
       autoDelete: true
       initializeParams:
         diskSizeGb: 200
-        diskType: zones/us-central1-b/diskTypes/pd-ssd
+        diskType: zones/us-central1-a/diskTypes/pd-ssd
         # GCP Deep Learning VM — CUDA 12.8, NVIDIA driver 570, Ubuntu 22.04.
         # Works for both L4 and T4 (cu121 torch wheels run on any driver >= 520).
         # List available: gcloud compute images list --project deeplearning-platform-release --no-standard-images --format="value(family)" | grep pytorch

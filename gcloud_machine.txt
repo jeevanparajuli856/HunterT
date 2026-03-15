@@ -4,3 +4,5 @@ ltsm = passphrase
 
 Transformer
 gs://dir-huntert-transformer
+
+ltsm-t4-transformer-vm  compute.v1.instance  COMPLETED  []
