@@ -32,19 +32,31 @@ Our BF results per domain type — **max matches the paper exactly**:
 
 The BF baseline is deterministic (wordlist + test tree, no model involved). Our max values matching the paper's numbers **proves the dataset is identical**. The paper reports the peak-performing domain per sector, not the cross-domain average.
 
-### LM results follow the same pattern
+### LM results: apples-to-apples vs cherry-picked
 
-| Domain Type | Paper LM | Our LM Max (pred=750) | Our LM Max (all pred) |
-|-------------|----------|----------------------|----------------------|
-| University  | 90       | **101**              | 125                  |
-| Hospital    | 175      | **217**              | 217                  |
-| Company     | 89       | **86**               | 111                  |
-| Government  | 128      | **172**              | 206                  |
+**Apples-to-apples** — same architecture as paper (`MD5_MF5_es512_nl4_dr0.6`) at `pred=750`:
 
-Our max LM numbers are in the same range as the paper's. The small differences are explained by:
-- Different model selection (`models[3]` = their best; we trained our own grid)
-- Our best model has loss 3.297 vs their 3.271 — close but not identical
-- The paper uses a fixed `prediction_limit=750` while our best results come from sweeping all limits
+| Domain Type | Paper LM | Our Same Model (pred=750) Max | Our Same Model (pred=750) Mean |
+|-------------|----------|-------------------------------|-------------------------------|
+| University  | 90       | 69                            | 17.7                          |
+| Hospital    | 175      | 100                           | 26.9                          |
+| Company     | 89       | 54                            | 13.6                          |
+| Government  | 128      | 81                            | 16.8                          |
+
+Our paper-equivalent single model **underperforms** the paper by ~30-45% at max. The gap is from:
+- **Model quality**: our loss 3.297 vs their 3.271 (small but compounds across domains)
+- **`<pad>` suppression**: our pipeline suppresses `<pad>` during inference (paper does not), redistributing probability mass and changing prediction rankings
+
+**Cherry-picked** — best of all 16 models × all prediction limits per domain:
+
+| Domain Type | Paper LM | Our Best Model Max (pred=750) | Our Best Model Max (all pred) |
+|-------------|----------|-------------------------------|-------------------------------|
+| University  | 90       | 101                           | 125                           |
+| Hospital    | 175      | 217                           | 217                           |
+| Company     | 89       | 86                            | 111                           |
+| Government  | 128      | 172                           | 206                           |
+
+These higher numbers come from selecting the **best of 16 different models** per domain (not the paper-equivalent model) and sweeping prediction limits up to 10,000. This is a valid evaluation strategy for our LSTM-vs-Transformer comparison (both get the same selection advantage) but should not be compared directly against the paper's single-model numbers.
 
 ---
 
@@ -140,16 +152,41 @@ The paper inserts special tokens as `<unk>@0, <eos>@2, <sos>@1, <pad>@3` while w
 
 | Gap | Cause | Severity |
 |-----|-------|----------|
-| LM max numbers differ by ~10-20% per sector | Different model (loss 3.297 vs 3.271) and `<pad>` suppression | Minor |
+| Same-model LM max is ~30-45% below paper | Model quality (loss 3.297 vs 3.271) and `<pad>` suppression changing rankings | Moderate |
+| Cherry-picked LM max matches/exceeds paper | Best of 16 models per domain inflates numbers vs paper's single model | **Not a real gap** — different selection strategy |
 | Probabilistic baseline numbers may differ | Per-category trees + wordlist trees vs global tree | Moderate |
 | Our mean ≠ paper's reported numbers | Paper reports max/peak, not mean | **Resolved** — not a real gap |
 
 ---
 
+## Bugs Found and Fixed in DirHunterT Transformer Pipeline
+
+Before training, a code review of `transformer_pipeline/` uncovered three issues:
+
+### 1. Segment Embedding Train/Eval Mismatch (CRITICAL — fixed)
+
+During training, segment embeddings are disabled when vocab > 5K (`grid_search.py:268`) because keyword coverage is <2% (99% of tokens map to type-7 "unknown"). However, `main.py evaluate` constructed the model **without** passing `disable_segment_emb`, defaulting to `False`. This added untrained random noise (init weights from uniform [-0.1, 0.1]) to every prediction during evaluation.
+
+**Fix**: `main.py` now passes `disable_segment_emb=(vocab_size > 5000)` during eval to match training.
+
+### 2. `custom_tokenizer` Dead Code in `lm_attack` (MODERATE — fixed)
+
+The `lm_attack()` function in `attacks.py` accepted a `custom_tokenizer` parameter but never used it — always calling the hard-coded `generate` import from `ltsm_pipeline/src/inference.py`. The transformer pipeline passed temperature/beam-search wrappers via this parameter, but they were silently ignored. All evaluations ran at temperature=1.0 with greedy top-K regardless of CLI flags.
+
+**Fix**: `lm_attack()` now uses `gen_fn = custom_tokenizer if custom_tokenizer is not None else generate` and calls `gen_fn` instead of `generate` directly.
+
+### 3. No Weight Tying (DESIGN — fixed)
+
+The LSTM baseline uses `tie_weights=True` (embedding and output FC share weights), reducing parameters by `vocab_size × d_model` (~11M for vocab=22K, d_model=512) and improving generalisation. The transformer did not tie weights.
+
+**Fix**: `model.py` now sets `self.fc.weight = self.token_embedding.weight` with `bias=False`, matching the LSTM's weight-tying strategy.
+
+---
+
 ## Recommendations for DirHunterT Comparison
 
-1. **Fix `<pad>` suppression**: Remove pad suppression from `inference.py` to match the paper's behavior exactly. Then retrain/re-evaluate to get a clean baseline.
-2. **Use prediction_limit=750 for head-to-head**: The paper's main results use 750. Compare LSTM vs Transformer at this specific setting.
+1. **Do NOT "fix" `<pad>` suppression**: Both LSTM and transformer suppress `<pad>` equally. Suppressing it is arguably more correct than the paper's approach. Since the comparison is LSTM-vs-transformer (not us-vs-paper), consistency between our two pipelines matters more than matching the paper exactly.
+2. **Use single best model at prediction_limit=750 for head-to-head**: The paper's main results use a single model at pred=750. Compare best LSTM (by val loss) vs best transformer (by val loss) at pred=750 for the primary claim. Report best-of-best (all models × all pred limits) as supplementary.
 3. **Report both mean and max**: Unlike the paper, report per-domain-type mean AND max to give the full picture.
 4. **Statistical testing**: With 119 test domains, use paired Wilcoxon signed-rank test to show transformer improvement is statistically significant.
 5. **The comparison is valid**: Both LSTM and Transformer use the same dataset, same vocab pipeline, same attack simulation, same test domains. Relative improvement is the claim, not matching the paper's absolute numbers.
