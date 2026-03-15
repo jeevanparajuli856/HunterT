@@ -8,3 +8,13 @@ gs://dir-huntert-transformer
 ltsm-t4-transformer-vm  compute.v1.instance  COMPLETED  []
 
 ltsm-v100-transformer-vm  compute.v1.instance  COMPLETED  []
+
+
+sudo apt-get update
+sudo apt-get install -y nvidia-driver-525
+sudo reboot
+
+
+nvidia-smi
+
+python3 -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'No GPU found')"
