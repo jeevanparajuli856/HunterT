@@ -210,7 +210,11 @@ class DirHunterT(nn.Module):
         )
 
         # Output projection: d_model -> vocab_size
-        self.fc = nn.Linear(d_model, vocab_size)
+        # Weight tying: share embedding and output projection weights.
+        # Reduces parameters by vocab_size × d_model and improves
+        # generalisation on small datasets (same technique used by LSTM baseline).
+        self.fc = nn.Linear(d_model, vocab_size, bias=False)
+        self.fc.weight = self.token_embedding.weight
 
         # Segment type buffer: maps token index -> segment type index (saved with model)
         self.register_buffer('segment_type_buffer', _build_segment_buffer(vocab_size, vocab))
@@ -228,8 +232,8 @@ class DirHunterT(nn.Module):
         self.depth_embedding.weight.data.uniform_(-init_range, init_range)
         self.segment_embedding.weight.data.uniform_(-init_range, init_range)
 
-        nn.init.xavier_uniform_(self.fc.weight)
-        nn.init.zeros_(self.fc.bias)
+        # fc.weight is tied to token_embedding.weight — no separate init needed.
+        # fc.bias was removed (bias=False) since tied projections don't use bias.
 
         for layer in self.transformer.layers:
             for p in layer.parameters():

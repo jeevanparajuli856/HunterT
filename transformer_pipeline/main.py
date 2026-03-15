@@ -179,6 +179,10 @@ def evaluate_command(args):
             vocab = create_vocabulary(train_df, min_freq, max_depth)
             vocab_size = len(vocab)
 
+            # Disable segment embeddings for large vocabs — must match training config
+            # (grid_search.py disables them when vocab_size > 5000)
+            disable_seg = vocab_size > 5000
+
             model = DirHunterT(
                 vocab_size=vocab_size,
                 d_model=d_model,
@@ -187,6 +191,7 @@ def evaluate_command(args):
                 dropout=dropout,
                 max_depth=max_depth,
                 vocab=vocab,
+                disable_segment_emb=disable_seg,
             ).to(device)
 
             model_path = os.path.join(args.saved_models_folder, model_file)

@@ -255,26 +255,27 @@ def lm_attack(model, vocab, max_depth, test_root, device, request_limit=100000,
               prediction_limit=750, custom_tokenizer=None):
     """
     Language model-based directory attack.
-    Uses LSTM predictions to prioritize directories.
-    
+    Uses model predictions to prioritize directories.
+
     Args:
-        model: LSTM model
+        model: Language model (LSTM or DirHunterT)
         vocab: Vocabulary
         max_depth (int): Max depth model was trained on
         test_root: Root of test tree
         device: Device to run inference on
         request_limit (int): Max requests allowed
         prediction_limit (int): Number of predictions to consider
-        custom_tokenizer (callable): Tokenizer function
-        
+        custom_tokenizer (callable): Optional custom generate function with signature
+            (model, token_list, vocab, max_depth, model_max_depth, device,
+             prediction_limit, seed=None) -> [(prob, token), ...]
+            When None, uses the default generate from inference.py.
+
     Returns:
         tuple: (requests_list, successful_list, failed_list, time)
     """
-    from .data import custom_tokenizer as default_tokenizer
-    
-    if custom_tokenizer is None:
-        custom_tokenizer = default_tokenizer
-    
+    # Use custom generate function if provided, otherwise default
+    gen_fn = custom_tokenizer if custom_tokenizer is not None else generate
+
     total_requests = 0
     successful_responses = 0
     failed_responses = 0
@@ -306,8 +307,8 @@ def lm_attack(model, vocab, max_depth, test_root, device, request_limit=100000,
         return None, None
     
     # Initialize heap with starting predictions
-    predictions = generate(model, ['<sos>'], vocab, max_depth, max_depth, device,
-                          prediction_limit)
+    predictions = gen_fn(model, ['<sos>'], vocab, max_depth, max_depth, device,
+                         prediction_limit)
     
     heap = [(-prob, 1, word, ['<sos>'], test_root) for prob, word in predictions]
     heapq.heapify(heap)
@@ -321,8 +322,8 @@ def lm_attack(model, vocab, max_depth, test_root, device, request_limit=100000,
         if new_node is not None:
             # Found directory! Get predictions for next level
             new_token_list = token_list + [child_name]
-            predictions = generate(model, new_token_list, vocab, max_depth, max_depth,
-                                  device, prediction_limit)
+            predictions = gen_fn(model, new_token_list, vocab, max_depth, max_depth,
+                                device, prediction_limit)
             
             # Add predictions to heap
             for prob, pred_word in predictions:
