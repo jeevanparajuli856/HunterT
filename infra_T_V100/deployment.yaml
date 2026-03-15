@@ -3,7 +3,7 @@ resources:
   type: compute.v1.instance
   properties:
     zone: us-central1-b
-    machineType: zones/us-central1-b/machineTypes/n1-standard-16
+    machineType: zones/us-central1-b/machineTypes/custom-12-46080
 
     scheduling:
       provisioningModel: SPOT
