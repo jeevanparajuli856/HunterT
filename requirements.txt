@@ -1,7 +1,6 @@
---extra-index-url https://download.pytorch.org/whl/cu121
-torch==2.0.1+cu121
-torchtext==0.15.2
-torchdata==0.6.1
+torch==2.1.0
+torchtext==0.16.0
+torchdata==0.7.0
 anytree==2.11.0
 pandas>=1.5.0
 numpy>=1.23.0,<2.0

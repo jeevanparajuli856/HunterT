@@ -1,10 +1,10 @@
-# GCP Infra — DirHunterT Transformer (NVIDIA T4)
+# GCP Infra — DirHunterT Transformer (NVIDIA V100)
 
 ## Scripts
 
 | Script | Does |
 |--------|------|
-| `create_infra.sh` | Create Spot T4 VM |
+| `create_infra.sh` | Create Spot V100 VM |
 | `destroy_infra.sh` | Delete VM |
 | `create_storage.sh` | Create GCS bucket |
 | `destroy_storage.sh` | Delete GCS bucket |
@@ -46,19 +46,19 @@ BUCKET_NAME=dirhuntert-transformer ./destroy_storage.sh
 ## VM
 
 ```bash
-# Create — auto-tries zones until T4 Spot capacity is found
+# Create — auto-tries zones until V100 Spot capacity is found
 ./create_infra.sh
 
 # Script prints the zone it succeeded in, e.g.:
-#   VM created: T4 Spot in us-east1-b
-#   gcloud compute ssh ltsm-t4-transformer-vm --zone us-east1-b --project dirhunter-t
+#   VM created: V100 Spot in us-central1-a
+#   gcloud compute ssh ltsm-v100-transformer-vm --zone us-central1-a --project dirhunter-t
 
 # Destroy
 ./destroy_infra.sh
 ```
 
-Defaults: `DEPLOYMENT_NAME=ltsm-t4-transformer`, `MACHINE_TYPE=n1-standard-4`, `DISK_SIZE_GB=200`.
-Zones tried in order: `us-central1-a/b → us-east1-b/c → us-east4-b → europe-west4-b → asia-southeast1-b`.
+Defaults: `DEPLOYMENT_NAME=ltsm-v100-transformer`, `MACHINE_TYPE=n1-standard-8`, `DISK_SIZE_GB=200`.
+Zones tried in order: `us-central1-a/b/c → us-east1-c/d → europe-west4-a/b → asia-east1-a`.
 
 ---
 
