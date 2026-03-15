@@ -226,9 +226,9 @@ tmux new -s ltsm
 
 ## Notes
 
-- VM is created as Spot (`preemptible`) with `nvidia-tesla-v100` accelerator.
+- VM is created as Spot (`preemptible`) with `nvidia-l4` accelerator.
 - Startup script installs base tools and attempts NVIDIA driver installation.
 - If Spot capacity is unavailable in your zone, switch `ZONE` and retry.
 - Deployment Manager is used because you asked for YAML-based easy create/destroy flow.
 - Spot instances can be preempted at any time - use resume mode and sync to GCS.
-- V100 Spot is faster and more expensive than T4 Spot (see transformer_pipeline/README.md for updated cost estimates).
+- L4 Spot is much cheaper than V100 and suitable for transformer training (see transformer_pipeline/README.md for updated cost estimates).

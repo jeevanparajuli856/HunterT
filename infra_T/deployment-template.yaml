@@ -13,7 +13,7 @@ resources:
       instanceTerminationAction: STOP
 
     guestAccelerators:
-    - acceleratorType: zones/${ZONE}/acceleratorTypes/nvidia-tesla-v100
+    - acceleratorType: zones/${ZONE}/acceleratorTypes/nvidia-l4
       acceleratorCount: 1
 
     disks:
@@ -52,7 +52,7 @@ resources:
           apt-get update
           apt-get install -y git tmux htop python3-venv python3-pip ubuntu-drivers-common
 
-          # Install NVIDIA driver for T4 if not already present.
+          # Install NVIDIA driver for L4 if not already present.
           if ! command -v nvidia-smi >/dev/null 2>&1; then
             ubuntu-drivers autoinstall || true
           fi

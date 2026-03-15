@@ -1,9 +1,9 @@
 resources:
-- name: ltsm-t4-transformer-vm
+- name: ltsm-v100-transformer-vm
   type: compute.v1.instance
   properties:
     zone: us-central1-a
-    machineType: zones/us-central1-a/machineTypes/n1-standard-8
+    machineType: zones/us-central1-a/machineTypes/n1-standard-16
 
     scheduling:
       provisioningModel: SPOT
@@ -13,7 +13,7 @@ resources:
       instanceTerminationAction: STOP
 
     guestAccelerators:
-    - acceleratorType: zones/us-central1-a/acceleratorTypes/nvidia-tesla-t4
+    - acceleratorType: zones/us-central1-a/acceleratorTypes/nvidia-tesla-v100
       acceleratorCount: 1
 
     disks:
