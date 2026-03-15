@@ -3,7 +3,7 @@
 DirHunterT-A: decoder-only transformer for directory enumeration.
 Runs on the **same GCP Spot V100 infrastructure** as the LSTM pipeline.
 
-Grid search: **64 model combinations** (vs LSTM's 108).
+Grid search: **96 model combinations** (vs LSTM's 108).
 Produces **4 best models** — one per `(max_depth, min_freq)` global pair — for direct comparison with LSTM.
 
 ---
@@ -15,9 +15,45 @@ Produces **4 best models** — one per `(max_depth, min_freq)` global pair — f
 | Model | Decoder-only transformer (causal self-attention) |
 | Tokenizer | Same as LSTM — no changes to `data.py` or vocab |
 | Position encoding | Learnable depth embeddings (not sinusoidal) |
-| Segment embeddings | 8 structural categories (API, Admin, Content, etc.) |
-| Hyperparameter grid | `d_model`×`n_heads`×`n_layers`×`dropout` = 16 arch × 4 global = 64 total |
+| Segment embeddings | 8 structural categories — **see warning below** |
+| Hyperparameter grid | `d_model`×`n_heads`×`n_layers`×`dropout` = 24 arch × 4 global = 96 total |
 | Reused from LSTM | `data.py`, `attacks.py`, `tree_builder.py`, `plot_tables.py` |
+
+---
+
+## ⚠️ Segment Embedding Diagnostic (run before training)
+
+Segment type embeddings classify each directory token into one of 8 structural categories (API, Admin, Content, etc.). This only helps if the vocabulary is small enough for the keyword lists to cover a meaningful fraction of tokens.
+
+**Run the diagnostic first:**
+
+```bash
+source ../.venv/bin/activate
+python3 -c "
+import sys
+sys.path.insert(0, '../ltsm_pipeline')
+sys.path.insert(0, '.')
+from ltsm_pipeline.src.data import load_datasets, create_vocabulary
+from transformer_pipeline.src.model import diagnose_segment_coverage
+train_df, _, _ = load_datasets('../LTSM_Research/datasets/LM-training-datasets')
+vocab = create_vocabulary(train_df, min_freq=3, max_depth=10)
+print(f'Vocab size: {len(vocab)}')
+diagnose_segment_coverage(vocab)
+"
+```
+
+**Actual results (measured 2026-03-15):**
+
+| Global params | Vocab size | Type-7 (unknown) | Signal types 0–6 |
+|--------------|-----------|-----------------|-----------------|
+| MF=3, MD=10 | 40,717 | **98.9%** ⚠️ | 1.1% |
+| MF=5, MD=10 | 24,507 | **98.2%** ⚠️ | 1.8% |
+| MF=3, MD=5  | 36,724 | **98.8%** ⚠️ | 1.2% |
+| MF=5, MD=5  | 22,170 | **98.1%** ⚠️ | 1.9% |
+
+**Interpretation:** The vocabulary is 22K–40K domain-specific directory strings (not the ~150 tokens assumed during design). Segment embeddings cover only ~1% of tokens — the remaining 99% all receive the same type-7 embedding. This means the segment embedding adds a near-constant bias to every forward pass: **effectively zero signal.**
+
+**Resolution:** Segment embeddings are disabled in the model's forward pass for this run (type-7 tokens receive a zeroed embedding via the `disable_segment_emb` flag — see model.py). The real architectural advantages — full causal attention and depth embeddings — are unaffected. Segment embeddings remain in the architecture for a future BPE-tokenized variant where vocab size (~2K–4K) would allow meaningful coverage.
 
 ---
 
@@ -98,7 +134,7 @@ python main.py train --resume
 ```
 
 What happens:
-- 64 model combinations trained (4 global × 16 arch)
+- 96 model combinations trained (4 global × 24 arch)
 - After each combo: checkpoint saved + GCS sync runs
 - If preempted and restarted: completed combos are skipped automatically
 - 4 best models saved (one per global param pair)
@@ -280,9 +316,9 @@ python main.py train \
 | Phase | Duration | Cost (Spot V100) |
 |-------|----------|------------------|
 | Smoke test | ~2 min | ~$0.02 |
-| Full training (64 models) | 5–15 hours | ~$15–30 |
+| Full training (96 models) | 7–18 hours | ~$20–40 |
 | Evaluation (119 domains) | 2–6 hours | ~$5–10 |
-| **Total** | **~7–21 hours** | **~$20–40** |
+| **Total** | **~9–24 hours** | **~$25–50** |
 
 Transformer training is faster per model than LSTM (no truncated BPTT, GPU-parallel attention).
 
@@ -312,7 +348,7 @@ transformer_pipeline/
     model.py               # DirHunterT: decoder-only transformer
     inference.py           # generate() — identical interface to LSTM version
     training.py            # train_model() with warmup + weight decay
-    grid_search.py         # TransformerGridSearch — 64 combos, Spot-safe
+    grid_search.py         # TransformerGridSearch — 96 combos, Spot-safe
     utils.py               # get_transformer_hyperparams_from_filename()
 
 # Reused from ltsm_pipeline/src (no modifications):

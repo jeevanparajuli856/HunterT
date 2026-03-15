@@ -3,8 +3,11 @@ Hyperparameter grid search for DirHunterT transformer training.
 
 Grid dimensions:
   Global  (same as LSTM for fair comparison): max_depth=[5,10], min_freq=[3,5]
-  Architecture: d_model=[256,512], n_heads=[4,8], n_layers=[4,6], dropout=[0.2,0.4]
-  Total: 4 global × 16 arch = 64 combinations (vs LSTM's 108)
+  Architecture: d_model=[128,256,512], n_heads=[4,8], n_layers=[4,6], dropout=[0.2,0.4,0.6]
+  Total: 4 global × 24 arch = 96 combinations (vs LSTM's 108)
+
+d_model=128 added: may outperform larger models on small vocabs (~100 tokens).
+dropout=0.6 added: LSTM's best models sometimes used high regularisation.
 
 Best model per (max_depth, min_freq) global pair is saved — produces 4 final
 models matching the 4 LSTM models for direct comparison.
@@ -25,8 +28,10 @@ from .model import DirHunterT
 from .training import train_model
 
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'ltsm_pipeline'))
-from src.data import load_datasets, get_dataloaders
+_ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+from ltsm_pipeline.src.data import load_datasets, get_dataloaders
 
 
 class TransformerGridSearch:
@@ -88,10 +93,12 @@ class TransformerGridSearch:
         self.max_depths    = [5, 10]
         self.min_freqs     = [3, 5]
         # Transformer architecture params
-        self.d_models      = [256, 512]
+        # d_model=128: often optimal for small vocabs (~100 tokens); low compute cost
+        # dropout=0.6: matches high-regularisation LSTM configs that performed well
+        self.d_models      = [128, 256, 512]
         self.n_heads_list  = [4, 8]
         self.n_layers_list = [4, 6]
-        self.dropout_rates = [0.2, 0.4]
+        self.dropout_rates = [0.2, 0.4, 0.6]
 
         if self.smoke_test:
             self.max_depths    = [self.max_depths[0]]
@@ -211,7 +218,7 @@ class TransformerGridSearch:
     # ------------------------------------------------------------------
 
     def train_all(self):
-        """Train all 64 hyperparameter combinations."""
+        """Train all 96 hyperparameter combinations."""
         global_params = [
             (md, mf)
             for md in self.max_depths
@@ -256,6 +263,10 @@ class TransformerGridSearch:
                     f"n_layers={n_layers}, dropout={dropout}"
                 )
 
+                # Disable segment embeddings when vocab is large: keyword lists cover
+                # <5% of tokens, making the type-7 embedding a near-constant noise term.
+                disable_seg = vocab_size > 5000
+
                 state_dict, valid_loss, epochs_trained = train_model(
                     model_class=DirHunterT,
                     vocab_size=vocab_size,
@@ -265,6 +276,7 @@ class TransformerGridSearch:
                     dropout=dropout,
                     max_depth=max_depth,
                     vocab=vocab,
+                    disable_segment_emb=disable_seg,
                     train_data=train_data,
                     valid_data=valid_data,
                     n_epochs=self.n_epochs,

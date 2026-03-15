@@ -13,23 +13,38 @@ Usage mirrors ltsm_pipeline/main.py so the two pipelines are directly comparable
 import sys
 import os
 import argparse
+import warnings
 import torch
 import pandas as pd
 
-# Allow imports from this package and from ltsm_pipeline
+# PyTorch 2.0.x emits a spurious dtype warning when the CUDA fast-path for
+# TransformerEncoderLayer converts the float causal mask to bool internally.
+# This is cosmetic only — the attention mask semantics are preserved correctly.
+warnings.filterwarnings(
+    'ignore',
+    message='Converting mask without torch.bool dtype to bool',
+    category=UserWarning,
+)
+
+# sys.path strategy:
+#   _ROOT (HunterT/)          -> enables 'ltsm_pipeline.src.*' as a full package path
+#   _HERE (transformer_pipeline/) -> enables 'src.*' for transformer's own modules
+# Both packages have a 'src' subpackage; using the full ltsm_pipeline.src.* namespace
+# avoids collision and preserves ltsm's internal relative imports.
 _HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.join(_HERE, '..')
+sys.path.insert(0, _ROOT)
 sys.path.insert(0, _HERE)
-sys.path.insert(0, os.path.join(_HERE, '..', 'ltsm_pipeline'))
 
 from src.grid_search import TransformerGridSearch
 from src.model import DirHunterT
-from src.inference import generate
+from src.inference import generate, beam_search_generate
 from src.utils import get_device, get_transformer_hyperparams_from_filename
 
 # Reuse data + attack utilities from ltsm_pipeline without modification
-from src.data import load_datasets, get_test_by_domain, create_vocabulary
-from src.tree_builder import create_tree, create_tree_with_occurrences
-from src.attacks import (
+from ltsm_pipeline.src.data import load_datasets, get_test_by_domain, create_vocabulary
+from ltsm_pipeline.src.tree_builder import create_tree, create_tree_with_occurrences
+from ltsm_pipeline.src.attacks import (
     breadth_first_attack, depth_first_attack,
     probabilistic_attack, lm_attack,
 )
@@ -99,7 +114,12 @@ def evaluate_command(args):
     print(f"Found {len(model_files)} transformer models")
 
     prediction_limits = args.prediction_sweep
+    temperatures = args.temperature_sweep
+    beam_width = args.beam_width
     print(f"Prediction sweep: {prediction_limits}")
+    print(f"Temperature sweep: {temperatures}")
+    if beam_width > 1:
+        print(f"Beam search: beam_width={beam_width}")
 
     results = []
 
@@ -175,23 +195,46 @@ def evaluate_command(args):
             print(f"  Model: {model_file}")
 
             for pred_limit in prediction_limits:
-                lm_reqs, lm_success, _, _ = lm_attack(
-                    model, vocab, max_depth, test_root, device,
-                    request_limit=args.request_limit,
-                    prediction_limit=pred_limit,
-                    custom_tokenizer=None,
-                )
-                lm_hits = lm_success[-1] if lm_success else 0
-                improvement = _pct(lm_hits, baseline_success)
-                print(f"    topK={pred_limit:5d}: {lm_hits} hits  ({improvement:+.1f}%)")
+                for temp in temperatures:
+                    if beam_width > 1:
+                        # Beam search: wrap generate call with beam_search_generate
+                        def _beam_gen(m, tl, v, md, mmd, dev, pl, seed=None):
+                            return beam_search_generate(
+                                m, tl, v, dev, pl,
+                                beam_width=beam_width, temperature=temp,
+                            )
+                        custom_tokenizer = _beam_gen
+                    else:
+                        # Standard top-K with temperature
+                        def _temp_gen(m, tl, v, md, mmd, dev, pl, seed=None,
+                                      _t=temp):
+                            return generate(m, tl, v, md, mmd, dev, pl,
+                                            seed=seed, temperature=_t)
+                        custom_tokenizer = _temp_gen
 
-                results.append(_make_row(
-                    domain_name, domain_type,
-                    f"transformer_{model_file}", model_file,
-                    pred_limit, lm_hits,
-                    lm_reqs[-1] if lm_reqs else 0,
-                    improvement,
-                ))
+                    lm_reqs, lm_success, _, _ = lm_attack(
+                        model, vocab, max_depth, test_root, device,
+                        request_limit=args.request_limit,
+                        prediction_limit=pred_limit,
+                        custom_tokenizer=custom_tokenizer,
+                    )
+                    lm_hits = lm_success[-1] if lm_success else 0
+                    improvement = _pct(lm_hits, baseline_success)
+                    method = f"beam{beam_width}" if beam_width > 1 else "topK"
+                    print(
+                        f"    {method}={pred_limit:5d} temp={temp}: "
+                        f"{lm_hits} hits  ({improvement:+.1f}%)"
+                    )
+
+                    results.append(_make_row(
+                        domain_name, domain_type,
+                        f"transformer_{model_file}_t{temp}", model_file,
+                        pred_limit, lm_hits,
+                        lm_reqs[-1] if lm_reqs else 0,
+                        improvement,
+                        temperature=temp,
+                        beam_width=beam_width,
+                    ))
 
     # Save results
     os.makedirs(args.results_folder, exist_ok=True)
@@ -224,13 +267,16 @@ def _pct(hits, baseline):
     return ((hits - baseline) / max(baseline, 1)) * 100.0
 
 
-def _make_row(domain, dtype, approach, model_file, pred_limit, hits, reqs, improvement):
+def _make_row(domain, dtype, approach, model_file, pred_limit, hits, reqs, improvement,
+              temperature=1.0, beam_width=1):
     return {
         'domain': domain,
         'domain_type': dtype,
         'approach': approach,
         'model_file': model_file,
         'prediction_limit': pred_limit,
+        'temperature': temperature,
+        'beam_width': beam_width,
         'successful_responses': hits,
         'total_requests': reqs,
         'improvement_percent': improvement,
@@ -275,6 +321,12 @@ def main():
     eval_p.add_argument('--request-limit', type=int, default=100_000)
     eval_p.add_argument('--prediction-sweep', nargs='+', type=int,
                         default=[100, 250, 500, 750, 1000, 2000, 5000, 10000])
+    eval_p.add_argument('--temperature-sweep', nargs='+', type=float, default=[1.0],
+                        help='Softmax temperatures to evaluate (default: [1.0]). '
+                             'Typical sweep: 0.7 1.0 1.2')
+    eval_p.add_argument('--beam-width', type=int, default=1,
+                        help='Beam search width (default=1 = greedy top-K). '
+                             'Set >1 to enable beam search (e.g. --beam-width 5)')
     eval_p.add_argument('--results-folder', default='./results')
     eval_p.set_defaults(func=evaluate_command)
 

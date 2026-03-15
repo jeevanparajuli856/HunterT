@@ -1,9 +1,9 @@
 resources:
-- name: ltsm-v100-transformer-vm
+- name: ltsm-L4-transformer-vm
   type: compute.v1.instance
   properties:
     zone: us-central1-a
-    machineType: zones/us-central1-a/machineTypes/n1-standard-16
+    machineType: zones/us-central1-a/machineTypes/g2-standard-4
 
     scheduling:
       provisioningModel: SPOT
@@ -13,7 +13,7 @@ resources:
       instanceTerminationAction: STOP
 
     guestAccelerators:
-    - acceleratorType: zones/us-central1-a/acceleratorTypes/nvidia-tesla-v100
+    - acceleratorType: zones/us-central1-a/acceleratorTypes/nvidia-l4
       acceleratorCount: 1
 
     disks:
@@ -52,7 +52,7 @@ resources:
           apt-get update
           apt-get install -y git tmux htop python3-venv python3-pip ubuntu-drivers-common
 
-          # Install NVIDIA driver for T4 if not already present.
+          # Install NVIDIA driver for L4 if not already present.
           if ! command -v nvidia-smi >/dev/null 2>&1; then
             ubuntu-drivers autoinstall || true
           fi

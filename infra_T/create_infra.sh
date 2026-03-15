@@ -11,7 +11,7 @@ if ! command -v gcloud >/dev/null 2>&1; then
 fi
 
 if ! command -v envsubst >/dev/null 2>&1; then
-  echo "Error: envsubst is required. Install gettext-base (Ubuntu: sudo apt-get install -y gettext-base)." >&2
+  echo "Error: envsubst is required. Install: sudo apt-get install -y gettext-base" >&2
   exit 1
 fi
 
@@ -22,7 +22,7 @@ MACHINE_TYPE="${MACHINE_TYPE:-g2-standard-4}"
 DISK_SIZE_GB="${DISK_SIZE_GB:-200}"
 
 if [[ -z "${PROJECT_ID}" ]]; then
-  echo "Error: PROJECT_ID is empty. Set it or run: gcloud config set project <PROJECT_ID>" >&2
+  echo "Error: PROJECT_ID is empty. Run: gcloud config set project <PROJECT_ID>" >&2
   exit 1
 fi
 
@@ -35,6 +35,8 @@ gcloud deployment-manager deployments create "${DEPLOYMENT_NAME}" \
   --project "${PROJECT_ID}"
 
 echo ""
-echo "Infra created. Useful commands:"
-echo "gcloud compute ssh ${DEPLOYMENT_NAME}-vm --zone ${ZONE} --project ${PROJECT_ID}"
-echo "./destroy_infra.sh"
+echo "SSH (wait ~2 min for startup script):"
+echo "  gcloud compute ssh ${DEPLOYMENT_NAME}-vm --zone ${ZONE} --project ${PROJECT_ID}"
+echo ""
+echo "Destroy when done:"
+echo "  ./destroy_infra.sh"

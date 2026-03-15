@@ -109,7 +109,7 @@ def evaluate_epoch(model, data, criterion, batch_size, seq_len, device):
 def train_model(model_class, vocab_size, d_model, n_heads, n_layers, dropout,
                 max_depth, vocab, train_data, valid_data, n_epochs,
                 batch_size, lr, clip, early_stopping_patience, device, seq_len,
-                weight_decay=1e-4, warmup_epochs=5):
+                weight_decay=1e-4, warmup_epochs=5, disable_segment_emb=False):
     """
     Train a single DirHunterT model with early stopping.
 
@@ -145,6 +145,7 @@ def train_model(model_class, vocab_size, d_model, n_heads, n_layers, dropout,
         dropout=dropout,
         max_depth=max_depth,
         vocab=vocab,
+        disable_segment_emb=disable_segment_emb,
     ).to(device)
 
     # Adam with weight decay — key difference from LSTM training

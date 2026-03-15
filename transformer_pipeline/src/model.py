@@ -27,40 +27,86 @@ import torch.nn as nn
 # Map: segment_type_idx -> set of lowercase keyword strings
 _SEGMENT_KEYWORDS: dict[int, set] = {
     0: {  # API / versioned endpoints
-        'api', 'v1', 'v2', 'v3', 'v4', 'v5', 'rest', 'graphql',
-        'webhook', 'webhooks', 'rpc', 'grpc', 'endpoint', 'endpoints',
+        'api', 'apis', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9', 'v10',
+        'rest', 'restful', 'graphql', 'gql', 'webhook', 'webhooks', 'rpc', 'grpc',
+        'endpoint', 'endpoints', 'service', 'services', 'gateway', 'proxy',
+        'swagger', 'openapi', 'schema', 'schemas', 'wsdl', 'soap',
+        'mobile', 'app', 'apps', 'public', 'internal', 'external', 'integration',
     },
     1: {  # Admin / Auth / User management
-        'admin', 'login', 'logout', 'auth', 'authenticate', 'authorization',
-        'dashboard', 'user', 'users', 'account', 'accounts', 'password',
-        'register', 'signin', 'signup', 'profile', 'profiles', 'settings',
-        'session', 'token', 'oauth', 'sso',
+        'admin', 'administration', 'administrator', 'administrador', 'manage', 'management',
+        'login', 'logout', 'logon', 'logoff', 'auth', 'authenticate', 'authentication',
+        'authorization', 'authorize', 'dashboard', 'panel', 'control', 'console',
+        'user', 'users', 'account', 'accounts', 'password', 'passwords', 'passwd',
+        'register', 'registration', 'signin', 'signup', 'sign-in', 'sign-up',
+        'profile', 'profiles', 'settings', 'preferences', 'config', 'configuration',
+        'session', 'sessions', 'token', 'tokens', 'oauth', 'sso', 'saml', 'ldap',
+        'member', 'members', 'membership', 'subscriber', 'subscribers', 'subscription',
+        'role', 'roles', 'permission', 'permissions', 'access', 'acl', 'security',
+        'wp-admin', 'wp-login', 'wp-content', 'cms', 'backend', 'staff-admin',
+        'myaccount', 'my-account', 'portal', 'secure', 'private',
     },
     2: {  # Content / Publishing
-        'news', 'blog', 'blogs', 'article', 'articles', 'post', 'posts',
-        'press', 'content', 'media', 'story', 'stories', 'publications',
+        'news', 'blog', 'blogs', 'blogging', 'article', 'articles', 'post', 'posts',
+        'press', 'content', 'contents', 'media', 'story', 'stories', 'publications',
         'publication', 'announcement', 'announcements', 'release', 'releases',
-        'press-release', 'press-releases', 'spotlight',
+        'press-release', 'press-releases', 'spotlight', 'editorial', 'magazine',
+        'journal', 'journals', 'newsletter', 'newsletters', 'digest', 'podcast',
+        'video', 'videos', 'audio', 'gallery', 'galleries', 'photo', 'photos',
+        'event', 'events', 'calendar', 'seminar', 'seminars', 'webinar', 'webinars',
+        'conference', 'conferences', 'workshop', 'workshops', 'training', 'course',
+        'courses', 'tutorial', 'tutorials', 'lesson', 'lessons', 'lecture', 'lectures',
+        'page', 'pages', 'category', 'categories', 'tag', 'tags', 'topic', 'topics',
     },
     3: {  # Static assets
-        'static', 'assets', 'img', 'images', 'image', 'css', 'js',
-        'javascript', 'fonts', 'font', 'files', 'uploads', 'upload',
-        'icons', 'icon', 'logo', 'logos', 'themes', 'theme',
+        'static', 'assets', 'asset', 'img', 'images', 'image', 'css', 'js', 'jsx',
+        'javascript', 'typescript', 'ts', 'fonts', 'font', 'files', 'uploads', 'upload',
+        'icons', 'icon', 'logo', 'logos', 'themes', 'theme', 'dist', 'build', 'bundle',
+        'public', 'media', 'cdn', 'lib', 'libs', 'vendor', 'vendors', 'node_modules',
+        'scripts', 'script', 'styles', 'style', 'stylesheets', 'downloads', 'download',
+        'attachments', 'attachment', 'resources', 'resource', 'res',
     },
     4: {  # Data / Operations
-        'data', 'export', 'exports', 'report', 'reports', 'upload', 'uploads',
-        'search', 'feed', 'feeds', 'import', 'imports', 'results',
-        'analytics', 'stats', 'statistics', 'metrics',
+        'data', 'database', 'db', 'export', 'exports', 'report', 'reports', 'reporting',
+        'upload', 'uploads', 'search', 'query', 'feed', 'feeds', 'rss', 'atom',
+        'import', 'imports', 'results', 'result', 'analytics', 'stats', 'statistics',
+        'metrics', 'logs', 'log', 'logging', 'audit', 'audits', 'monitoring', 'monitor',
+        'backup', 'backups', 'restore', 'sync', 'synchronize', 'batch', 'queue', 'jobs',
+        'job', 'tasks', 'task', 'cron', 'scheduler', 'pipeline', 'workflow', 'workflows',
+        'process', 'processes', 'operation', 'operations', 'transaction', 'transactions',
+        'index', 'indices', 'cache', 'storage', 'store',
     },
     5: {  # Organizational / Informational
-        'about', 'about-us', 'contact', 'careers', 'jobs', 'team', 'staff',
-        'services', 'help', 'support', 'faq', 'terms', 'privacy',
-        'locations', 'location', 'departments', 'department', 'faculty',
+        'about', 'about-us', 'aboutus', 'contact', 'contact-us', 'contactus',
+        'careers', 'career', 'jobs', 'job', 'team', 'staff', 'people', 'employees',
+        'services', 'help', 'support', 'faq', 'faqs', 'terms', 'tos', 'privacy',
+        'policy', 'policies', 'legal', 'disclaimer', 'sitemap', 'accessibility',
+        'locations', 'location', 'offices', 'office', 'campus', 'site', 'sites',
+        'departments', 'department', 'division', 'divisions', 'faculty', 'faculty-staff',
         'research', 'programs', 'program', 'resources', 'resource',
-        'alumni', 'visitors', 'directory',
+        'alumni', 'visitors', 'visitor', 'directory', 'map', 'maps',
+        'mission', 'vision', 'history', 'overview', 'introduction', 'welcome',
+        'community', 'partnership', 'partners', 'partner', 'sponsor', 'sponsors',
+        'donate', 'donation', 'donations', 'volunteer', 'volunteers',
+        'library', 'libraries', 'archive', 'archives', 'collection', 'collections',
+        'health', 'wellness', 'safety', 'emergency', 'parking', 'transportation',
+        'housing', 'dining', 'recreation', 'athletics', 'sports', 'student',
+        'students', 'graduate', 'undergraduate', 'admissions', 'admission',
+        'financial', 'finance', 'billing', 'payments', 'payroll', 'hr',
+        'it', 'technology', 'engineering', 'science', 'arts', 'humanities',
+        'medicine', 'medical', 'clinical', 'hospital', 'patient', 'patients',
+        'doctor', 'doctors', 'nursing', 'pharmacy', 'laboratory', 'lab', 'labs',
+        'government', 'municipal', 'city', 'county', 'state', 'federal',
+        'department-of', 'bureau', 'agency', 'office-of', 'division-of',
     },
     6: {  # Temporal (YEAR token + date-related)
         'year', 'archive', 'archives', 'history',
+        '2010', '2011', '2012', '2013', '2014', '2015', '2016', '2017', '2018',
+        '2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026',
+        'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+        'january', 'february', 'march', 'april', 'june', 'july', 'august',
+        'september', 'october', 'november', 'december', 'quarterly', 'annual',
+        'weekly', 'daily', 'monthly', 'q1', 'q2', 'q3', 'q4',
     },
     # Type 7 = default / unknown (all other tokens including special tokens)
 }
@@ -113,7 +159,8 @@ class DirHunterT(nn.Module):
     """
 
     def __init__(self, vocab_size: int, d_model: int, n_heads: int, n_layers: int,
-                 dropout: float, max_depth: int, vocab=None, n_segment_types: int = 8):
+                 dropout: float, max_depth: int, vocab=None, n_segment_types: int = 8,
+                 disable_segment_emb: bool = False):
         super().__init__()
 
         assert d_model % n_heads == 0, (
@@ -127,6 +174,9 @@ class DirHunterT(nn.Module):
         self.dropout_rate = dropout
         self.max_depth = max_depth
         self.n_segment_types = n_segment_types
+        # disable_segment_emb: set True when vocab is large (>5K) and keyword coverage
+        # is <5% — prevents the near-constant type-7 embedding from adding noise.
+        self.disable_segment_emb = disable_segment_emb
 
         # --- Three additive input representations ---
 
@@ -209,27 +259,35 @@ class DirHunterT(nn.Module):
         positions = torch.arange(seq_len, device=src.device).unsqueeze(0)  # (1, seq_len)
         positions = positions.clamp(max=self.max_depth + 1)
 
-        # Segment types from pre-built buffer (fast integer lookup)
-        seg_types = self.segment_type_buffer[src]                           # (batch, seq_len)
-
         # Additive embedding combination
         x = (
             self.token_embedding(src)
             + self.depth_embedding(positions.expand(batch_size, -1))
-            + self.segment_embedding(seg_types)
         )
+
+        # Segment embeddings: only added when meaningful coverage exists in vocab.
+        # With large vocabs (>5K) the keyword lists cover <5% of tokens, so 99%+
+        # of positions receive the type-7 embedding — effectively a constant bias
+        # that adds noise rather than signal. Disabled by default for large vocabs.
+        if not self.disable_segment_emb:
+            seg_types = self.segment_type_buffer[src]                       # (batch, seq_len)
+            x = x + self.segment_embedding(seg_types)
         x = self.emb_dropout(x)
 
-        # Padding mask (bool): True = PAD token, will be ignored in attention
-        pad_mask = (src == 3)                                               # (batch, seq_len)
-
         # Causal mask (bool): True = blocked position (upper triangle = future tokens).
-        # Using bool for both masks eliminates PyTorch mixed-type deprecation warnings.
-        causal_mask = torch.ones(
-            seq_len, seq_len, dtype=torch.bool, device=src.device
-        ).triu(diagonal=1)
+        # NOTE: src_key_padding_mask is intentionally NOT used here.
+        # The flat data format creates chunks where pos-0 can be a pad token; if pos-0
+        # is also the only causally-visible key, softmax(-inf) = NaN. Since the LSTM
+        # also attends through padding without masking, and CrossEntropyLoss ignores
+        # padding via ignore_index=3, we match the same convention.
+        # nn.Transformer.generate_square_subsequent_mask returns a float mask
+        # (-inf above diagonal, 0 on/below). PyTorch 2.x prefers float over bool
+        # for performance in _transformer_encoder_layer_fwd.
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(
+            seq_len, device=src.device
+        )
 
-        x = self.transformer(x, mask=causal_mask, src_key_padding_mask=pad_mask)
+        x = self.transformer(x, mask=causal_mask)
 
         logits = self.fc(x)                                                 # (batch, seq_len, vocab_size)
         return logits, None
@@ -245,3 +303,63 @@ class DirHunterT(nn.Module):
     def detach_hidden(self, hidden):
         """Return None — no hidden state to detach."""
         return None
+
+    def segment_type_distribution(self, vocab=None) -> dict:
+        """
+        Diagnostic: return count of vocab tokens assigned to each segment type.
+
+        Useful for verifying that type 7 (unknown) coverage is <30% of the vocab.
+        Call this after model construction with the vocab used during training.
+
+        Returns:
+            dict mapping segment_type_idx -> {'count': int, 'tokens': list[str]}
+        """
+        buf = self.segment_type_buffer
+        itos = vocab.get_itos() if vocab is not None else None
+
+        distribution = {}
+        for seg_type in range(self.n_segment_types):
+            mask = (buf == seg_type).nonzero(as_tuple=True)[0]
+            tokens = [itos[i.item()] for i in mask] if itos else []
+            distribution[seg_type] = {'count': mask.numel(), 'tokens': tokens}
+        return distribution
+
+
+def diagnose_segment_coverage(vocab, n_segment_types: int = 8) -> None:
+    """
+    Print segment type distribution for a given vocabulary.
+    Run this to verify type 7 (unknown) is <30% of total tokens.
+
+    Usage:
+        from transformer_pipeline.src.data import create_vocabulary
+        from transformer_pipeline.src.model import diagnose_segment_coverage
+        vocab = create_vocabulary(train_df, min_freq=3, max_depth=10)
+        diagnose_segment_coverage(vocab)
+    """
+    itos = vocab.get_itos()
+    type_names = {
+        0: 'API/Versioned',
+        1: 'Admin/Auth',
+        2: 'Content/Publishing',
+        3: 'Static assets',
+        4: 'Data/Operations',
+        5: 'Organizational',
+        6: 'Temporal',
+        7: 'Unknown (default)',
+    }
+    counts = {i: [] for i in range(n_segment_types)}
+    for token in itos:
+        seg = _TOKEN_TO_SEGMENT.get(token.lower(), 7)
+        counts[seg].append(token)
+
+    total = len(itos)
+    print(f"\nSegment type coverage for vocab of {total} tokens:")
+    print(f"{'Type':<4} {'Name':<25} {'Count':>6} {'Pct':>7}  Tokens (first 10)")
+    print("-" * 80)
+    for seg_type in range(n_segment_types):
+        tokens = counts[seg_type]
+        pct = 100.0 * len(tokens) / max(total, 1)
+        preview = ', '.join(tokens[:10])
+        flag = "  *** HIGH" if seg_type == 7 and pct > 30 else ""
+        print(f"{seg_type:<4} {type_names[seg_type]:<25} {len(tokens):>6} {pct:>6.1f}%  {preview}{flag}")
+    print()

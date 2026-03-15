@@ -23,8 +23,10 @@ resources:
       autoDelete: true
       initializeParams:
         diskSizeGb: ${DISK_SIZE_GB}
-        diskType: zones/${ZONE}/diskTypes/pd-balanced
-        sourceImage: projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts
+        diskType: zones/${ZONE}/diskTypes/pd-ssd
+        # Deep Learning VM — CUDA 11.8 + NVIDIA drivers pre-installed.
+        # Required for L4 (Ada Lovelace, compute capability 8.9).
+        sourceImage: projects/deeplearning-platform-release/global/images/family/pytorch-latest-gpu-ubuntu-2004-py310
 
     networkInterfaces:
     - network: global/networks/default
@@ -44,15 +46,17 @@ resources:
 
     metadata:
       items:
+      - key: install-nvidia-driver
+        value: "True"
       - key: startup-script
         value: |
           #!/usr/bin/env bash
           set -euxo pipefail
           export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y git tmux htop python3-venv python3-pip ubuntu-drivers-common
 
-          # Install NVIDIA driver for L4 if not already present.
-          if ! command -v nvidia-smi >/dev/null 2>&1; then
-            ubuntu-drivers autoinstall || true
-          fi
+          apt-get update -qq
+          apt-get install -y --no-install-recommends git tmux htop gettext-base python3-venv
+
+          # Verify L4 GPU is visible (DLVM pre-installs drivers)
+          nvidia-smi || { echo "ERROR: GPU not visible"; exit 1; }
+          echo "VM ready. GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
