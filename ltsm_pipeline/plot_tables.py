@@ -183,26 +183,32 @@ def build_all_approaches_table(eval_df: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def build_paper_four_approaches_table(eval_df: pd.DataFrame) -> pd.DataFrame:
-    """Build paper-style table for BF, DF, Probabilistic, and LM."""
+def _build_four_approaches_table(eval_df: pd.DataFrame, agg_func: str = 'mean') -> pd.DataFrame:
+    """
+    Build paper-style table for BF, DF, Probabilistic, and LM.
+
+    Args:
+        eval_df: evaluation results dataframe
+        agg_func: 'mean' for per-type average, 'max' for per-type best domain
+                  (the paper reports max — best single domain per sector)
+    """
     df = eval_df.copy()
 
     if 'domain_type' not in df.columns:
-        # Backward-compatibility for old CSVs: infer a coarse type from domain filename.
         df['domain_type'] = df['domain'].map(_domain_label)
 
     df['domain_type'] = df['domain_type'].map(_normalize_domain_type)
 
-    # Baseline approaches: one value per domain, then average per domain_type.
+    # Baseline approaches: one value per domain, then aggregate per domain_type.
     baselines = df[(df['model_file'] == 'baseline') & (df['approach'].isin(['breadth_first', 'depth_first', 'probabilistic']))].copy()
-    baseline_agg = baselines.groupby(['approach', 'domain_type'], as_index=False)['successful_responses'].mean()
+    baseline_agg = baselines.groupby(['approach', 'domain_type'], as_index=False)['successful_responses'].agg(agg_func)
 
-    # LM: choose best run per domain across models/prediction_limit, then average per domain_type.
+    # LM: choose best run per domain across models/prediction_limit, then aggregate per domain_type.
     lm = df[df['model_file'] != 'baseline'].copy()
     if lm.empty:
         raise ValueError('No LM rows found in eval_results.csv. Run evaluation first.')
     best_lm_per_domain = lm.sort_values('successful_responses', ascending=False).groupby('domain', as_index=False).first()
-    lm_agg = best_lm_per_domain.groupby('domain_type', as_index=False)['successful_responses'].mean()
+    lm_agg = best_lm_per_domain.groupby('domain_type', as_index=False)['successful_responses'].agg(agg_func)
     lm_agg['approach'] = 'language_model'
 
     merged = pd.concat([
@@ -214,7 +220,7 @@ def build_paper_four_approaches_table(eval_df: pd.DataFrame) -> pd.DataFrame:
         index='approach',
         columns='domain_type',
         values='successful_responses',
-        aggfunc='mean'
+        aggfunc=agg_func
     )
 
     expected_cols = ['University', 'Hospitals', 'Companies', 'Government']
@@ -242,6 +248,16 @@ def build_paper_four_approaches_table(eval_df: pd.DataFrame) -> pd.DataFrame:
     return table
 
 
+def build_paper_four_approaches_table(eval_df: pd.DataFrame) -> pd.DataFrame:
+    """Build paper-style table (mean per sector) for BF, DF, Probabilistic, and LM."""
+    return _build_four_approaches_table(eval_df, agg_func='mean')
+
+
+def build_paper_four_approaches_max_table(eval_df: pd.DataFrame) -> pd.DataFrame:
+    """Build paper-style table (max per sector — matches paper's reported numbers)."""
+    return _build_four_approaches_table(eval_df, agg_func='max')
+
+
 def build_sweep_table(eval_df: pd.DataFrame, sweep_values: List[int]) -> pd.DataFrame:
     """Create table showing mean LM discoveries by topPredicts across all domains/models."""
     lm_df = eval_df[eval_df['model_file'] != 'baseline'].copy()
@@ -265,10 +281,13 @@ def build_sweep_table(eval_df: pd.DataFrame, sweep_values: List[int]) -> pd.Data
 GATE_THRESHOLD_PCT = 30.0   # DirHunterT-A must beat LSTM by at least this %
 
 
-def _best_lm_by_sector(eval_df: pd.DataFrame) -> pd.DataFrame:
+def _best_lm_by_sector(eval_df: pd.DataFrame, agg_func: str = 'mean') -> pd.DataFrame:
     """
-    Return mean successful_responses per sector for the best LM run per domain.
+    Return aggregated successful_responses per sector for the best LM run per domain.
     Works for both LSTM and transformer eval CSVs (same column names).
+
+    Args:
+        agg_func: 'mean' or 'max'
     """
     df = eval_df.copy()
     if 'domain_type' not in df.columns:
@@ -287,19 +306,19 @@ def _best_lm_by_sector(eval_df: pd.DataFrame) -> pd.DataFrame:
     return (
         best_per_domain
         .groupby('domain_type', as_index=False)['successful_responses']
-        .mean()
+        .agg(agg_func)
     )
 
 
-def _baseline_by_sector(eval_df: pd.DataFrame) -> pd.DataFrame:
-    """Return mean breadth-first baseline per sector."""
+def _baseline_by_sector(eval_df: pd.DataFrame, agg_func: str = 'mean') -> pd.DataFrame:
+    """Return aggregated breadth-first baseline per sector."""
     df = eval_df.copy()
     if 'domain_type' not in df.columns:
         df['domain_type'] = df['domain'].map(_domain_label)
     df['domain_type'] = df['domain_type'].map(_normalize_domain_type)
 
     bf = df[(df['approach'] == 'breadth_first') & (df['model_file'] == 'baseline')]
-    return bf.groupby('domain_type', as_index=False)['successful_responses'].mean()
+    return bf.groupby('domain_type', as_index=False)['successful_responses'].agg(agg_func)
 
 
 def build_lstm_vs_transformer_table(lstm_df: pd.DataFrame,
@@ -432,8 +451,12 @@ def main() -> None:
           'table_all_approaches_by_domain')
 
     _save(build_paper_four_approaches_table(eval_df),
-          'Overall Performance (4 Approaches)',
+          'Overall Performance — Mean per Sector (4 Approaches)',
           'table_paper_four_approaches')
+
+    _save(build_paper_four_approaches_max_table(eval_df),
+          'Overall Performance — Max per Sector (Matches Paper)',
+          'table_paper_four_approaches_max')
 
     # ---- LSTM vs DirHunterT-A comparison tables (when --transformer-results given) ----
 

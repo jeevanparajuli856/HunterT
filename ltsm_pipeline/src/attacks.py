@@ -252,7 +252,7 @@ def probabilistic_attack(train_root, test_root, wordlist_file, request_limit=100
 
 
 def lm_attack(model, vocab, max_depth, test_root, device, request_limit=100000,
-              prediction_limit=500, custom_tokenizer=None):
+              prediction_limit=750, custom_tokenizer=None):
     """
     Language model-based directory attack.
     Uses LSTM predictions to prioritize directories.
