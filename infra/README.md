@@ -135,7 +135,7 @@ Create bucket (one time):
 
 ```bash
 cd infra
-BUCKET_NAME=dir-huntert-lstm ./create_storage.sh
+BUCKET_NAME=dirhuntert-lstm ./create_storage.sh
 ```
 
 Run training with periodic sync:
@@ -146,7 +146,7 @@ python main.py train \
 	--resume \
 	--progress-file ./saved_models/train_progress.json \
 	--checkpoint-dir ./saved_models/checkpoints \
-	--sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-lstm-artifacts/lstm/saved_models && gsutil -m rsync -r ./results gs://dirhunter-t-lstm-artifacts/lstm/results" \
+	--sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhuntert-lstm/lstm/saved_models && gsutil -m rsync -r ./results gs://dirhuntert-lstm/lstm/results" \
 	--sync-every-n 1
 ```
 
@@ -154,8 +154,8 @@ Restore artifacts on a new Spot VM after preemption:
 
 ```bash
 cd ~/HunterT/ltsm_pipeline
-gsutil -m rsync -r gs://dir-huntert-lstm/lstm/saved_models ./saved_models
-gsutil -m rsync -r gs://dir-huntert-lstm/lstm/results ./results
+gsutil -m rsync -r gs://dirhuntert-lstm/lstm/saved_models ./saved_models
+gsutil -m rsync -r gs://dirhuntert-lstm/lstm/results ./results
 ```
 
 ## Spot Recovery Runbook
@@ -188,8 +188,8 @@ pip install -r ../requirements.txt
 
 ```bash
 cd ~/HunterT/ltsm_pipeline
-gsutil -m rsync -r gs://dirhunter-t-lstm-artifacts/lstm/saved_models ./saved_models
-gsutil -m rsync -r gs://dirhunter-t-lstm-artifacts/lstm/results ./results
+gsutil -m rsync -r gs://dirhuntert-lstm/lstm/saved_models ./saved_models
+gsutil -m rsync -r gs://dirhuntert-lstm/lstm/results ./results
 ```
 
 5. Resume training:
@@ -200,7 +200,7 @@ python main.py train \
 	--resume \
 	--progress-file ./saved_models/train_progress.json \
 	--checkpoint-dir ./saved_models/checkpoints \
-	--sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-lstm-artifacts/lstm/saved_models && gsutil -m rsync -r ./results gs://dirhunter-t-lstm-artifacts/lstm/results" \
+	--sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhuntert-lstm/lstm/saved_models && gsutil -m rsync -r ./results gs://dirhuntert-lstm/lstm/results" \
 	--sync-every-n 1
 ```
 
@@ -220,3 +220,8 @@ tmux new -s lstm
 - If Spot capacity is unavailable in your zone, switch `ZONE` and retry.
 - Deployment Manager is used because you asked for YAML-based easy create/destroy flow.
 - Spot instances can be preempted at any time - use resume mode and sync to GCS.
+
+
+
+
+gsutil -m rsync -r ./LSTM_Research/ gs://dirhuntert-lstm/
