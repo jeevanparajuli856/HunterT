@@ -1,14 +1,9 @@
 """
 Training loop for DirHunterT transformer.
 
-Adapted from lstm_pipeline/src/training.py.
-Key differences from the LSTM version:
-  - No hidden state management (no init_hidden / detach_hidden calls)
-  - Weight decay added to Adam (prevents overfitting on 1M-scale data)
-  - Warmup scheduler: linear warmup for first `warmup_epochs` epochs,
-    then ReduceLROnPlateau as before
-  - model_class constructor takes (vocab_size, d_model, n_heads, n_layers,
-    dropout, max_depth, vocab) — different from LSTM signature
+V2 uses path-wise batches instead of the flat token stream used by V1.
+Each training sample is one padded path, and the loss is computed on the
+next-token targets inside that path only.
 """
 
 import copy
@@ -18,39 +13,35 @@ import torch.optim as optim
 from tqdm import tqdm
 
 
-def train_epoch(model, data, optimizer, criterion, batch_size, seq_len, clip, device):
-    """
-    Train for one epoch using the same chunked iteration as the LSTM.
+PAD_INDEX = 3
 
-    Each seq_len chunk corresponds to one complete padded path sequence
-    (get_dataloaders pads every path to exactly seq_len = max_depth + 2).
+
+def train_epoch(model, data_loader, optimizer, criterion, clip, device):
+    """
+    Train for one epoch with one padded path per sample.
 
     Args:
         model:          DirHunterT model
-        data (Tensor):  Shape (batch_size, total_tokens)
+        data_loader:    DataLoader yielding tensors of shape (batch_size, seq_len)
         optimizer:      Adam with weight_decay
         criterion:      CrossEntropyLoss(ignore_index=3)
-        batch_size (int): Batch size
-        seq_len (int):  Sequence length (max_depth + 2)
         clip (float):   Gradient norm clip value
         device:         Torch device
 
     Returns:
-        float: Average epoch loss
+        float: Average token-level loss on non-pad targets
     """
-    epoch_loss = 0
+    epoch_loss = 0.0
+    token_count = 0
     model.train()
 
-    num_batches = data.shape[-1]
-    data = data[:, :num_batches - (num_batches - 1) % seq_len]
-    num_batches = data.shape[-1]
-
-    for idx in range(0, num_batches - 1, seq_len):
+    for (batch,) in data_loader:
         optimizer.zero_grad()
 
-        src    = data[:, idx     : idx + seq_len    ].to(device)
-        target = data[:, idx + 1 : idx + seq_len + 1].to(device)
-        batch_size_actual = src.shape[0]
+        batch = batch.to(device)
+        src = batch[:, :-1]
+        target = batch[:, 1:]
+        batch_size_actual, seq_len = src.shape
 
         prediction, _ = model(src, None)
 
@@ -62,38 +53,36 @@ def train_epoch(model, data, optimizer, criterion, batch_size, seq_len, clip, de
         torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
         optimizer.step()
 
-        epoch_loss += loss.item() * seq_len
+        non_pad_tokens = (target != PAD_INDEX).sum().item()
+        epoch_loss += loss.item() * non_pad_tokens
+        token_count += non_pad_tokens
 
-    return epoch_loss / num_batches
+    return epoch_loss / max(token_count, 1)
 
 
-def evaluate_epoch(model, data, criterion, batch_size, seq_len, device):
+def evaluate_epoch(model, data_loader, criterion, device):
     """
     Evaluate on validation set.
 
     Args:
         model:          DirHunterT model
-        data (Tensor):  Shape (batch_size, total_tokens)
+        data_loader:    DataLoader yielding tensors of shape (batch_size, seq_len)
         criterion:      CrossEntropyLoss
-        batch_size (int): Batch size
-        seq_len (int):  Sequence length
         device:         Torch device
 
     Returns:
-        float: Average validation loss
+        float: Average token-level loss on non-pad targets
     """
-    epoch_loss = 0
+    epoch_loss = 0.0
+    token_count = 0
     model.eval()
 
-    num_batches = data.shape[-1]
-    data = data[:, :num_batches - (num_batches - 1) % seq_len]
-    num_batches = data.shape[-1]
-
     with torch.no_grad():
-        for idx in range(0, num_batches - 1, seq_len):
-            src    = data[:, idx     : idx + seq_len    ].to(device)
-            target = data[:, idx + 1 : idx + seq_len + 1].to(device)
-            batch_size_actual = src.shape[0]
+        for (batch,) in data_loader:
+            batch = batch.to(device)
+            src = batch[:, :-1]
+            target = batch[:, 1:]
+            batch_size_actual, seq_len = src.shape
 
             prediction, _ = model(src, None)
 
@@ -101,14 +90,16 @@ def evaluate_epoch(model, data, criterion, batch_size, seq_len, device):
                 prediction.reshape(batch_size_actual * seq_len, -1),
                 target.reshape(-1),
             )
-            epoch_loss += loss.item() * seq_len
+            non_pad_tokens = (target != PAD_INDEX).sum().item()
+            epoch_loss += loss.item() * non_pad_tokens
+            token_count += non_pad_tokens
 
-    return epoch_loss / num_batches
+    return epoch_loss / max(token_count, 1)
 
 
 def train_model(model_class, vocab_size, d_model, n_heads, n_layers, dropout,
-                max_depth, vocab, train_data, valid_data, n_epochs,
-                batch_size, lr, clip, early_stopping_patience, device, seq_len,
+                max_depth, vocab, train_loader, valid_loader, n_epochs,
+                lr, clip, early_stopping_patience, device,
                 weight_decay=1e-4, warmup_epochs=5, disable_segment_emb=False):
     """
     Train a single DirHunterT model with early stopping.
@@ -122,15 +113,13 @@ def train_model(model_class, vocab_size, d_model, n_heads, n_layers, dropout,
         dropout (float):          Dropout rate
         max_depth (int):          Max path depth (controls depth embedding size)
         vocab:                    torchtext vocab (for segment type buffer)
-        train_data (Tensor):      Training data (batch_size, total_tokens)
-        valid_data (Tensor):      Validation data
+        train_loader:             Training DataLoader with one padded path per sample
+        valid_loader:             Validation DataLoader with one padded path per sample
         n_epochs (int):           Max epochs
-        batch_size (int):         Batch size
         lr (float):               Peak learning rate
         clip (float):             Gradient norm clip value
         early_stopping_patience:  Stop if no improvement for this many epochs
         device:                   Torch device
-        seq_len (int):            Sequence length (max_depth + 2)
         weight_decay (float):     L2 regularisation — important for transformers (default 1e-4)
         warmup_epochs (int):      Linear LR warmup duration (default 5 epochs)
 
@@ -150,7 +139,7 @@ def train_model(model_class, vocab_size, d_model, n_heads, n_layers, dropout,
 
     # Adam with weight decay — key difference from LSTM training
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss(ignore_index=3)   # ignore <pad> token index 3
+    criterion = nn.CrossEntropyLoss(ignore_index=PAD_INDEX)
 
     # Linear warmup for first warmup_epochs, then ReduceLROnPlateau takes over
     def _warmup_lambda(epoch):
@@ -170,10 +159,10 @@ def train_model(model_class, vocab_size, d_model, n_heads, n_layers, dropout,
 
     for epoch in tqdm(range(1, n_epochs + 1), desc='Training'):
         train_loss = train_epoch(
-            model, train_data, optimizer, criterion, batch_size, seq_len, clip, device
+            model, train_loader, optimizer, criterion, clip, device
         )
         valid_loss = evaluate_epoch(
-            model, valid_data, criterion, batch_size, seq_len, device
+            model, valid_loader, criterion, device
         )
 
         # Warmup scheduler steps every epoch regardless

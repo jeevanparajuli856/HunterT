@@ -1,333 +1,300 @@
-# Next_Plan: Beat LSTM with Context-Aware Transformer + Deploy as CLI Tool
+# Next_Plan: Beat LSTM with Transformer
 
-## Context
+## What We Are Actually Deciding
 
-DirHunterT transformer **fails** to beat the LSTM baseline (-7.6% overall). The LSTM wins because:
-1. It implicitly learns cross-path correlations via hidden state carry-over during training
-2. The transformer sees each 7-12 token path in complete isolation
-3. The transformer is 3-9x over-parameterized (11-31M vs 3.4M params)
-4. Short sequences (7-12 tokens) don't benefit from attention
+The immediate research question is:
 
-**Strategy**: Build a context-aware transformer that conditions predictions on ALL previously discovered paths — something the LSTM architecturally cannot do. But first, run diagnostic experiments to validate hypotheses before committing to the full rebuild.
+**Can a fairly trained transformer beat the LSTM baseline on this dataset?**
 
-**End goal**: Beat LSTM by >30% in all 4 sectors, then compile into a Rust CLI tool that outperforms gobuster/feroxbuster.
+Everything else is secondary until that is answered.
 
----
+That means:
 
-## Phase 0: Diagnostic Experiments (Before Building Anything)
+- first validate the fair V2 transformer baseline
+- then decide whether the transformer still needs smaller capacity or more context
+- only then consider the larger context-aware rebuild
 
-**Purpose**: Validate root cause hypotheses with cheap experiments. Stop investing in the wrong direction early.
+## Current State
 
-### 0A. Temperature Sweep on Existing Transformer Models
+### Established Results
 
-**What**: Evaluate existing 4 best transformer models across 8 temperatures.
-**Files**: None to modify — CLI already supports `--temperature-sweep`.
-**Command**:
+Best mean sector results so far:
+
+| Model | UNI | HOS | COM | GOV | Mean |
+|------|-----|-----|-----|-----|------|
+| LSTM | 33.2 | 62.4 | 40.5 | 35.5 | 42.9 |
+| Transformer V1 | 31.5 | 64.4 | 30.2 | 32.4 | 39.6 |
+
+So Transformer V1 is currently **-7.6%** vs LSTM overall.
+
+### What Was Wrong With V1
+
+Transformer V1 reused the flat-stream training regime from the LSTM pipeline.
+
+That was not a fair comparison because:
+
+- the LSTM benefits from hidden-state carry-over during training
+- the transformer does not
+- the positional semantics are worse for a transformer under the flat-stream setup
+
+### What Is Already Implemented
+
+`transformer_pipelineV2/` is now the fair-comparison pipeline.
+
+Completed in code:
+
+- path-wise batching: one padded path per sample
+- `src = sequence[:-1]`, `target = sequence[1:]`
+- separate V2 artifact folders:
+  - `saved_models_pathwise/`
+  - `results_pathwise/`
+- V2 progress files tagged so V1 progress is ignored
+
+## Updated Priority Order
+
+This is the new ranking for Phase 0.
+
+1. **0C: Fix the training regime**  
+   This is now the highest-priority item and the next required experiment.
+
+2. **0B: Small model grid**  
+   Run this only if V2 still loses materially after 0C.
+
+3. **0A: Temperature sweep**  
+   Keep it, but move it down. Calibration is useful only after we have a fair V2 model worth calibrating.
+
+4. **0D: Analysis**  
+   Use this after 0C/0B/0A results exist.
+
+5. **0d: LSTM context hack baseline**  
+   Keep it as an optional research probe, not as the main next step.
+
+## Phase 0: Active Diagnostic Plan
+
+### 0C. Fix the Training Regime
+
+**Priority**: 1  
+**Status**: Implemented in code, not yet fully evaluated  
+**Pipeline**: `transformer_pipelineV2/`
+
+This is now the first experiment.
+
+What changed:
+
+- V2 no longer uses the flat-tensor sliding window from V1
+- V2 trains on individual padded paths via a proper DataLoader
+- this removes the LSTM-specific training advantage from the comparison
+
+What it tells us:
+
+- if V2 closes most of the gap, then V1 mostly failed because of training regime
+- if V2 still loses clearly, then architecture/tokenization/capacity issues remain
+
+Run first:
+
 ```bash
-cd transformer_pipeline
-python3 main.py evaluate \
-  --temperature-sweep 0.5 0.7 0.8 0.9 1.0 1.2 1.5 2.0 \
-  --prediction-sweep 500 750 1000 \
-  --results-folder ./results/temp_sweep
-```
-**What it tells us**:
-- temp > 1.0 helps => transformer is overconfident, calibration is fixable
-- temp < 1.0 helps => transformer is underconfident
-- no temp helps => the learned representations themselves are weak
+cd /home/jeevan/HunterT/transformer_pipelineV2
 
-**Time**: ~4 hours on GPU
+../.venv/bin/python main.py train \
+  --smoke-test \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
+  --saved-models-folder ./saved_models_pathwise_smoke
+
+../.venv/bin/python main.py train \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
+  --saved-models-folder ./saved_models_pathwise
+
+../.venv/bin/python main.py evaluate \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
+  --saved-models-folder ./saved_models_pathwise \
+  --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
+  --results-folder ./results_pathwise
+```
+
+Compare against LSTM:
+
+```bash
+cd /home/jeevan/HunterT/lstm_pipeline
+
+../.venv/bin/python plot_tables.py \
+  --results-csv ./results/eval_results.csv \
+  --transformer-results ../transformer_pipelineV2/results_pathwise/eval_results_transformer_best.csv \
+  --output-dir ./results/figures
+```
 
 ### 0B. Small Model Grid Search
 
-**What**: Train transformers with LSTM-scale parameter counts.
-**File to create**: `transformer_pipeline/src/diagnostic_grid.py` (~40 lines)
-- Subclass `TransformerGridSearch`, override grid to:
-  - `d_model_sizes = [64, 128]`
-  - `n_heads_list = [2, 4]`
-  - `n_layers_list = [2, 3]`
-  - `dropout_rates = [0.2, 0.4]`
-- Total: 4 global x 16 arch = 64 combos
-**What it tells us**:
-- Small model >= large model => over-parameterization confirmed
-- Small model << large model => capacity isn't the issue
+**Priority**: 2  
+**Status**: Not implemented yet  
+**Run only if**: V2 still loses materially after 0C
 
-**Time**: ~6 hours on GPU
+Purpose:
 
-### 0C. LSTM Context Hack Baseline
+- test whether the current transformers are simply too large for short 7-12 token paths and this vocabulary
 
-**What**: Test if feeding discovered paths through LSTM hidden state before predicting improves results.
-**File to create**: `lstm_pipeline/src/inference_context_hack.py` (~80 lines)
-- New `generate_with_primed_hidden()`:
-  - Accept list of discovered path token sequences
-  - Run model forward on concatenated discovered paths to "prime" hidden state
-  - Then predict next token for current partial path using primed hidden state
-- Wrap as `custom_tokenizer` for existing `lm_attack()`
-**What it tells us**:
-- LSTM-with-context > LSTM-without-context => cross-path info helps, justifies Phase 1-3
-- The gap size = theoretical ceiling for context benefit on LSTM architecture
+Target diagnostic grid:
 
-**Time**: ~3 hours on GPU
+- `d_model = [64, 128]`
+- `n_heads = [2, 4]`
+- `n_layers = [2, 3]`
+- `dropout = [0.2, 0.4]`
+
+What it tells us:
+
+- small model >= current V2 model: over-parameterization is real
+- small model << current V2 model: capacity is not the main issue
+
+Implementation target:
+
+- add `transformer_pipelineV2/src/diagnostic_grid.py`
+- subclass `TransformerGridSearch`
+- keep the same fair path-wise V2 training regime
+
+### 0A. Temperature Sweep
+
+**Priority**: 3  
+**Status**: Supported by CLI, but no longer the first thing to run  
+**Run only if**: 0C produces a model that is close enough to LSTM that calibration might matter
+
+Reframed purpose:
+
+- temperature sweep is a calibration check, not a root-cause fix
+- do not spend time calibrating V1 before measuring fair V2
+
+Use it on the best V2 models, not on the unfair V1 setup.
+
+Suggested command:
+
+```bash
+cd /home/jeevan/HunterT/transformer_pipelineV2
+
+../.venv/bin/python main.py evaluate \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
+  --saved-models-folder ./saved_models_pathwise \
+  --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
+  --temperature-sweep 0.5 0.7 0.8 0.9 1.0 1.2 1.5 2.0 \
+  --prediction-sweep 500 750 1000 \
+  --results-folder ./results_pathwise_temp
+```
+
+What it tells us:
+
+- higher temperature helps: model is overconfident
+- lower temperature helps: model is underconfident
+- no temperature helps: representations are the bigger issue
 
 ### 0D. Analysis
 
-**File to create**: `diagnostics/analyze_phase0.py` (~80 lines)
-- Load results from 0A, 0B, 0C
-- Produce summary table: best temperature, small vs large model, context vs no-context
-- Print go/no-go recommendation
+**Priority**: 4  
+**Status**: Not implemented yet
 
-### Phase 0 Gate (must pass at least ONE):
-- [ ] Temperature sweep improves transformer by >10% in >=2 sectors
-- [ ] Small model outperforms large model in >=2 sectors
-- [ ] LSTM-with-context > LSTM-without-context by >5% (context helps)
+After 0C and optional 0B/0A, create one simple analysis script to summarize:
 
-**If none pass**: Root causes are wrong. Reassess before proceeding.
+- V2 vs LSTM
+- V2 vs V1
+- small-model vs default-model
+- best temperature if a sweep was run
 
----
+Suggested output:
 
-## Phase 1: Context-Aware Data Pipeline
+- sector table
+- overall mean comparison
+- go / no-go recommendation for context-aware work
 
-**Purpose**: New data loader that groups paths by domain and creates multi-path training sequences.
+### 0d. LSTM Context Hack Baseline
 
-### Key Design Decisions
+**Priority**: 5  
+**Status**: Optional, not blocking
 
-**Sequence format** (multi-path with `<sep>` separator):
-```
-<sos> ctx1_tok1 ctx1_tok2 <eos> <sep> <sos> ctx2_tok1 <eos> <sep> <sos> target_tok1 target_tok2 <eos> <pad>...
-```
+Keep this phase, but reframe it:
 
-**Context window**: `context_paths=5` default, `context_max_tokens=64`
-- 5 context paths x ~4 tokens avg = ~25 tokens
-- 1 target path = ~7 tokens (with SOS/EOS)
-- 5 separators = 5 tokens
-- Total ~37 tokens, well under 64 cap
+- this is not the main next step
+- this is only useful if we need an upper-bound style check on whether cross-path context helps at all
 
-**Target masking**: Loss computed ONLY on target path tokens. Context and `<sep>` positions masked with `ignore_index=-100` in the target tensor.
+What it would test:
 
-**`<sep>` token**: Appended to vocabulary after existing special tokens (indices 0-3 preserved).
+- whether priming the LSTM with discovered paths gives meaningful gains
 
-### Files to Create
+If it gives no gain:
 
-**`transformer_pipeline/src/data_context.py`** (~200 lines)
-- `create_vocabulary_with_sep(train_df, min_freq, max_depth)` — extends vocab with `<sep>`
-- `ContextPathDataset(torch.utils.data.Dataset)`:
-  - Init: takes train_df, vocab, max_depth, context_paths, context_max_tokens
-  - Groups paths by domain (`Filename` column)
-  - `__getitem__`: for path P from domain D:
-    1. Randomly sample `context_paths` other paths from D
-    2. Tokenize all paths (custom_tokenizer + SOS/EOS wrapping)
-    3. Concatenate: `ctx1 <sep> ctx2 <sep> ... <sep> target`
-    4. Truncate from left to `context_max_tokens` (preserve target path)
-    5. Build `path_position_ids` (which path each token belongs to)
-    6. Build `depth_ids` (depth within each individual path)
-    7. Build `target_mask` (-100 for context positions, real token index for target)
-  - Returns: `{input_ids, path_position_ids, depth_ids, target_ids}`
-- `collate_fn`: pad batch to max length, pad target_ids with -100
-- `get_context_dataloaders(...)` — returns vocab, train_loader, valid_loader
+- that weakens the case for a costly context-aware rebuild
 
-**`transformer_pipeline/src/data_context_test.py`** (~50 lines)
-- Validation script: load data, print 10 sequences in readable form, verify token alignment
+If it gives clear gain:
 
-### Verification
-- [ ] `vocab['<sep>']` returns valid index
-- [ ] Sequences with `context_paths=0` match existing single-path format
-- [ ] Target mask correctly has -100 on all context positions
-- [ ] Print 10 random sequences and manually verify correctness
+- that strengthens the case for context-aware transformer work later
 
----
+## Phase 0 Gate
 
-## Phase 2: Context-Aware Model
+Use this decision rule after 0C and optional follow-ups.
 
-**Purpose**: Modified DirHunterT with two-level positional embeddings and right-sized capacity.
+### Continue with non-context transformer work if any of these happen
 
-### Architecture: DirHunterT_Context
+- V2 beats LSTM overall
+- V2 materially narrows the gap
+- V2 shows clear sector wins that justify more tuning
+- small-model V2 improves meaningfully over default V2
 
-**Embeddings** (all additive):
-1. `token_embedding(vocab_size, d_model)` — same as current
-2. `depth_embedding(max_depth + 2, d_model)` — position within each path (resets at `<sep>`)
-3. `path_position_embedding(max_context_paths + 2, d_model)` — which path in the sequence (NEW)
+### Escalate to context-aware transformer only if both are true
 
-**Transformer**: Same causal self-attention, pre-layer norm. Standard causal mask — target tokens naturally attend to all context tokens.
+- fair V2 still does not beat LSTM
+- small-model diagnostics do not fix the gap
 
-**Target model size**: d_model=128, n_layers=3, n_heads=4 -> ~4-5M params (comparable to LSTM's 3.4M)
+## Reframed Future Phases
 
-### Files to Create
+These phases are still part of the roadmap, but they are **not active now**.
 
-**`transformer_pipeline/src/model_context.py`** (~300 lines)
-- `DirHunterT_Context(nn.Module)`:
-  - `forward(src, hidden=None, path_position_ids=None, depth_ids=None)`
-  - Backward compat: when path_position_ids=None, falls back to simple depth embedding
-  - LSTM-compatible stubs: `init_hidden()` -> None, `detach_hidden()` -> None
+### Phase 1: Context-Aware Data Pipeline
 
-**`transformer_pipeline/src/training_context.py`** (~150 lines)
-- DataLoader-based training loop (not flat tensor sliding window)
-- `CrossEntropyLoss(ignore_index=-100)` — masks padding AND context tokens
-- Same warmup + plateau scheduler + early stopping
+**Status**: Deferred  
+**When to activate**: Only if Phase 0 says isolated-path transformers are not enough
 
-**`transformer_pipeline/src/grid_search_context.py`** (~250 lines)
-- Two-stage search:
-  - Stage 1: Fix context_paths=5, search d_model={64,128,256}, n_layers={2,3,4}, n_heads={2,4}, dropout={0.2,0.4} -> 48 combos/global pair
-  - Stage 2: Best arch from stage 1, sweep context_paths={0,3,5,10} -> 4 combos/global pair
-  - Total: ~208 combos
+Keep the idea:
 
-### Files to Modify
-- `transformer_pipeline/main.py` — add `train-context` subcommand
+- group paths by domain
+- feed previously discovered paths as context
+- mask loss so only the target path is trained
 
-### Verification
-- [ ] Model param count 4-5M for d_model=128, n_layers=3
-- [ ] Forward: (B, 64) -> (B, 64, vocab_size)
-- [ ] Smoke test: 1 model, 1 epoch, loss decreases
-- [ ] context_paths=0 val loss matches existing non-context model
+But do not build it until Phase 0 finishes.
 
----
+### Phase 2: Context-Aware Model
 
-## Phase 3: Context-Aware Attack Loop
+**Status**: Deferred  
+**When to activate**: After Phase 1 is justified
 
-**Purpose**: Modified `lm_attack()` that feeds discovered paths as context.
+Keep the planned direction:
 
-### How It Works
+- path-position embeddings
+- per-path depth embeddings
+- right-sized capacity around LSTM scale
 
-```
-Round 1: context = []
-  -> Model predicts top-K root directories (same as current)
-  -> Discover /api/, /admin/
+But this is still conditional work.
 
-Round 2: context = ["/api/", "/admin/"]
-  -> Model sees BOTH discoveries, adjusts predictions
-  -> /docs/, /swagger/, /login/ become more likely
+### Phase 3: Context-Aware Attack Loop
 
-Round 3: context = ["/api/", "/admin/", "/docs/", "/api/v1/"]
-  -> Predictions get sharper with each discovery
-  -> Model adapts to site archetype
-```
+**Status**: Deferred  
+**When to activate**: Only after a context-aware model exists and shows offline promise
 
-### Files to Create
+Keep the idea:
 
-**`transformer_pipeline/src/inference_context.py`** (~120 lines)
-- `generate_with_context(model, token_list, discovered_paths, vocab, max_depth, device, prediction_limit, max_context_paths=10, temperature=1.0)`:
-  - Build context sequence from last N discovered paths + current partial path
-  - Construct `input_ids`, `path_position_ids`, `depth_ids` tensors
-  - Forward pass, logits at last position, top-K extraction
-  - Empty `discovered_paths` = identical to standard `generate()`
+- feed discovered paths back into inference
+- let predictions adapt as the attack progresses
 
-**`transformer_pipeline/src/attacks_context.py`** (~150 lines)
-- `lm_attack_context(...)`:
-  - Same heap-based exploration as existing `lm_attack()`
-  - Maintains `discovered_paths = []` — grows as directories found
-  - Each call to `generate_with_context()` passes accumulated discoveries
-  - Model gets smarter as attack progresses
+But this should not start before the model itself is validated.
 
-### Files to Modify
-- `transformer_pipeline/main.py` — add `evaluate-context` subcommand
+### Phase 4: Full Evaluation and Comparison
 
-### Verification
-- [ ] `max_context_paths=0` produces identical results to standard `lm_attack()`
-- [ ] Top-5 predictions visibly change as context accumulates
-- [ ] Inference <50ms per call
+**Status**: Deferred  
+**When to activate**: After any new context-aware model exists
 
----
+This phase stays valid, but it is not the current bottleneck.
 
-## Phase 4: Full Evaluation and Comparison
+### Phase 5: ONNX Export + Rust CLI
 
-**Purpose**: Run all approaches on 119 test domains, produce the paper's comparison table.
+**Status**: Deferred  
+**When to activate**: Only after a transformer actually wins
 
-### The Ablation Table
+Do not invest in deployment until the research question is settled.
 
-| Approach | UNI | HOS | COM | GOV | Mean |
-|----------|-----|-----|-----|-----|------|
-| BFS (wordlist baseline) | ... | ... | ... | ... | ... |
-| Probabilistic | ... | ... | ... | ... | ... |
-| LSTM + lm_attack | 33.2 | 62.4 | 40.5 | 35.5 | 42.9 |
-| LSTM + context hack (0C) | ? | ? | ? | ? | ? |
-| Transformer + lm_attack (no ctx) | 31.5 | 64.4 | 30.2 | 32.4 | 39.6 |
-| **Transformer + context-aware** | **?** | **?** | **?** | **?** | **?** |
+## Current Plan In One Sentence
 
-Row 4 (LSTM+hack) shows LSTM can't exploit context well.
-Row 5 (Transformer no-ctx) shows same-strategy = transformer loses.
-Row 6 (Transformer+ctx) shows the full system wins.
-
-### Files to Create
-- `transformer_pipeline/evaluate_full.py` (~200 lines) — unified eval across all approaches
-- `lstm_pipeline/plot_tables_v2.py` (~150 lines) — extended comparison + updated gate check
-
-### Gate Check
-- [ ] Context-aware transformer beats LSTM by >30% in ALL 4 sectors
-
----
-
-## Phase 5: ONNX Export + Rust CLI (huntert)
-
-**Purpose**: Production deployment as fast single-binary CLI tool.
-
-### Python Export
-- `transformer_pipeline/src/export_onnx.py` (~150 lines) — torch.onnx.export + int8 quantization
-- `transformer_pipeline/src/export_vocab.py` (~50 lines) — vocab as JSON
-
-### Rust CLI Structure
-
-```
-dirhunter_cli/
-  Cargo.toml          — ort, tokio, reqwest, clap, serde_json
-  src/
-    main.rs           — CLI: --target, --model, --vocab, --budget, --rps, --output
-    model.rs          — ONNX inference wrapper, top-K prediction
-    tokenizer.rs      — Split on /, YEAR replacement, context sequence builder
-    attack.rs         — Context-aware heap attack + async HTTP
-    output.rs         — JSON output of discovered paths
-```
-
-### Usage
-```bash
-huntert scan --target https://example.com \
-             --model model.onnx \
-             --vocab vocab.json \
-             --budget 100000 \
-             --context-paths 10 \
-             --rps 50 \
-             --output results.json
-```
-
-### Why This Beats gobuster/feroxbuster
-| Feature | gobuster/feroxbuster | huntert |
-|---------|---------------------|---------|
-| Strategy | Static wordlist | Adaptive — learns from each discovery |
-| Prioritization | None | Probability-ranked heap |
-| Request efficiency | ~2-5% hit rate | Target: 10-20%+ hit rate |
-| Speed | Very fast | Equally fast (Rust + async) |
-| Model size | N/A | ~4-8MB embedded ONNX |
-
----
-
-## Timeline
-
-```
-Phase 0 (1-2 days)  ─── diagnostics, validate hypotheses
-       |
-       v gate: at least one hypothesis confirmed
-Phase 1 (2-3 days)  ─── context data pipeline
-       |
-       v gate: data_context_test.py passes
-Phase 2 (3-4 days)  ─── context model + grid search
-       |
-       v gate: smoke test passes, val loss improves with context
-Phase 3 (1-2 days)  ─── context attack loop
-       |
-       v gate: context_paths=0 matches baseline
-Phase 4 (2-3 days)  ─── full evaluation (mostly GPU time)
-       |
-       v gate: >30% over LSTM in ALL 4 sectors
-Phase 5 (4-5 days)  ─── ONNX export + Rust CLI
-```
-
-**Total: ~13-19 days + GPU training time**
-
-## New Files Summary
-
-| Phase | Files | Est. Lines |
-|-------|-------|-----------|
-| 0 | `diagnostic_grid.py`, `inference_context_hack.py`, `analyze_phase0.py` | ~200 |
-| 1 | `data_context.py`, `data_context_test.py` | ~250 |
-| 2 | `model_context.py`, `training_context.py`, `grid_search_context.py` | ~700 |
-| 3 | `inference_context.py`, `attacks_context.py` | ~270 |
-| 4 | `evaluate_full.py`, `plot_tables_v2.py` | ~350 |
-| 5 | 2 Python export + 6 Rust source files | ~840 |
-| **Total** | **~20 new files** | **~2,600 lines** |
+Run fair V2 first, run small-model V2 second if needed, keep temperature sweep as a later calibration check, and leave the context-aware rebuild deferred unless fair V2 still fails.

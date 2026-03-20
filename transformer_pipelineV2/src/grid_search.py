@@ -4,7 +4,7 @@ Hyperparameter grid search for DirHunterT transformer training.
 Grid dimensions:
   Global  (same as LSTM for fair comparison): max_depth=[5,10], min_freq=[3,5]
   Architecture: d_model=[128,256,512], n_heads=[4,8], n_layers=[4,6], dropout=[0.2,0.4,0.6]
-  Total: 4 global × 24 arch = 96 combinations (vs LSTM's 108)
+  Total: 4 global × 36 arch = 144 combinations (vs LSTM's 108)
 
 d_model=128 added: may outperform larger models on small vocabs (~100 tokens).
 dropout=0.6 added: LSTM's best models sometimes used high regularisation.
@@ -16,6 +16,9 @@ Spot VM safety features (identical to LSTM pipeline):
   - Resume: skip already-completed combos via progress JSON
   - Checkpoints: per-combo .pt saved to checkpoint_dir
   - GCS sync: optional sync_cmd run every sync_every_n combos
+
+V2 difference:
+  - Training uses path-wise batches instead of the flat token stream from V1.
 """
 
 import os
@@ -25,13 +28,14 @@ import torch
 from tqdm import tqdm
 
 from .model import DirHunterT
+from .data import get_path_dataloaders
 from .training import train_model
 
 import sys
 _ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
-from lstm_pipeline.src.data import load_datasets, get_dataloaders
+from lstm_pipeline.src.data import load_datasets
 
 
 class TransformerGridSearch:
@@ -39,6 +43,8 @@ class TransformerGridSearch:
     Grid search trainer for DirHunterT transformer models.
     API mirrors lstm_pipeline GridSearchTrainer for easy switching.
     """
+
+    TRAINING_REGIME = 'pathwise_batched_v2'
 
     def __init__(self, data_folder, saved_models_folder, device=None,
                  n_epochs=200, batch_size=128, lr=1e-3, clip=0.25,
@@ -140,6 +146,13 @@ class TransformerGridSearch:
             return
         with open(self.progress_file) as f:
             progress = json.load(f)
+        progress_regime = progress.get('training_regime')
+        if progress_regime != self.TRAINING_REGIME:
+            print(
+                f"Ignoring progress file with regime={progress_regime!r}; "
+                f"expected {self.TRAINING_REGIME!r}."
+            )
+            return
         self.completed_models = set(progress.get('completed_models', []))
         for key, value in progress.get('best_models', {}).items():
             md = value.get('max_depth')
@@ -164,6 +177,7 @@ class TransformerGridSearch:
                 'model_path': info['model_path'],
             }
         payload = {
+            'training_regime':  self.TRAINING_REGIME,
             'completed_models': sorted(self.completed_models),
             'best_models':      best_payload,
             'num_results':      len(self.results),
@@ -218,7 +232,7 @@ class TransformerGridSearch:
     # ------------------------------------------------------------------
 
     def train_all(self):
-        """Train all 96 hyperparameter combinations."""
+        """Train all hyperparameter combinations for the path-wise V2 regime."""
         global_params = [
             (md, mf)
             for md in self.max_depths
@@ -243,11 +257,11 @@ class TransformerGridSearch:
             print(f"Global params: MAX_DEPTH={max_depth}, MIN_FREQ={min_freq}")
             print(f"{'='*60}")
 
-            vocab, train_data, valid_data = get_dataloaders(
+            vocab, train_loader, valid_loader = get_path_dataloaders(
                 self.train_df, self.valid_df, min_freq, max_depth, self.batch_size
             )
-            seq_len = max_depth + 2
             vocab_size = len(vocab)
+            seq_len = max_depth + 2
             print(f"Vocabulary size: {vocab_size}  |  seq_len: {seq_len}")
 
             for d_model, n_heads, n_layers, dropout in arch_params:
@@ -277,15 +291,13 @@ class TransformerGridSearch:
                     max_depth=max_depth,
                     vocab=vocab,
                     disable_segment_emb=disable_seg,
-                    train_data=train_data,
-                    valid_data=valid_data,
+                    train_loader=train_loader,
+                    valid_loader=valid_loader,
                     n_epochs=self.n_epochs,
-                    batch_size=self.batch_size,
                     lr=self.lr,
                     clip=self.clip,
                     early_stopping_patience=self.early_stopping_patience,
                     device=self.device,
-                    seq_len=seq_len,
                     weight_decay=self.weight_decay,
                     warmup_epochs=self.warmup_epochs,
                 )

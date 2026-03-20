@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-DirHunterT Transformer Pipeline — entry point.
+DirHunterT Transformer Pipeline V2 — entry point.
 
-Commands:
-    python main.py train       # Grid search: 64 transformer model combos
-    python main.py evaluate    # Evaluate best models vs LSTM on test domains
-    python main.py smoke-test  # 1 model, 1 epoch shape/interface check (~2 min)
+V2 keeps the model and evaluation loop from V1, but replaces the flat-token
+training regime with fair path-wise batches.
 
-Usage mirrors lstm_pipeline/main.py so the two pipelines are directly comparable.
+Recommended first command:
+  python main.py train-diagnostic
 """
 
 import sys
@@ -37,6 +36,7 @@ sys.path.insert(0, _ROOT)
 sys.path.insert(0, _HERE)
 
 from src.grid_search import TransformerGridSearch
+from src.diagnostic_grid import DiagnosticTransformerGridSearch
 from src.model import DirHunterT
 from src.inference import generate, beam_search_generate
 from src.utils import get_device, get_transformer_hyperparams_from_filename
@@ -56,14 +56,34 @@ from lstm_pipeline.src.attacks import (
 
 def train_command(args):
     print("\n" + "=" * 60)
-    print("DirHunterT TRANSFORMER — TRAINING PHASE")
+    print("DirHunterT TRANSFORMER V2 — TRAINING PHASE")
     print("=" * 60 + "\n")
 
+    _run_train(args, TransformerGridSearch)
+
+    print("\n" + "=" * 60)
+    print("TRAINING COMPLETE")
+    print("=" * 60)
+
+
+def train_diagnostic_command(args):
+    print("\n" + "=" * 60)
+    print("DirHunterT TRANSFORMER V2 — DIAGNOSTIC SMALL-GRID TRAINING")
+    print("=" * 60 + "\n")
+
+    _run_train(args, DiagnosticTransformerGridSearch)
+
+    print("\n" + "=" * 60)
+    print("DIAGNOSTIC TRAINING COMPLETE")
+    print("=" * 60)
+
+
+def _run_train(args, trainer_class):
     if not os.path.exists(args.data_folder):
         print(f"Error: Data folder not found: {args.data_folder}")
         sys.exit(1)
 
-    trainer = TransformerGridSearch(
+    trainer = trainer_class(
         data_folder=args.data_folder,
         saved_models_folder=args.saved_models_folder,
         device=get_device(),
@@ -83,10 +103,6 @@ def train_command(args):
     )
     trainer.train_all()
 
-    print("\n" + "=" * 60)
-    print("TRAINING COMPLETE")
-    print("=" * 60)
-
 
 # ---------------------------------------------------------------------------
 # evaluate command
@@ -94,7 +110,7 @@ def train_command(args):
 
 def evaluate_command(args):
     print("\n" + "=" * 60)
-    print("DirHunterT TRANSFORMER — EVALUATION PHASE")
+    print("DirHunterT TRANSFORMER V2 — EVALUATION PHASE")
     print("=" * 60 + "\n")
 
     device = get_device()
@@ -293,13 +309,18 @@ def _make_row(domain, dtype, approach, model_file, pred_limit, hits, reqs, impro
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="DirHunterT Transformer Pipeline")
+    parser = argparse.ArgumentParser(
+        description="DirHunterT Transformer Pipeline V2 (path-wise fair training)"
+    )
     subparsers = parser.add_subparsers(dest='command', help='Command to run')
 
     # ---- train ----
-    train_p = subparsers.add_parser('train', help='Train transformer models with grid search')
+    train_p = subparsers.add_parser(
+        'train',
+        help='Train transformer models with path-wise fair batching'
+    )
     train_p.add_argument('--data-folder', default='../LSTM_Research/datasets/LM-training-datasets')
-    train_p.add_argument('--saved-models-folder', default='./saved_models')
+    train_p.add_argument('--saved-models-folder', default='./saved_models_pathwise')
     train_p.add_argument('--epochs', type=int, default=200)
     train_p.add_argument('--batch-size', type=int, default=128)
     train_p.add_argument('--lr', type=float, default=1e-3)
@@ -310,18 +331,47 @@ def main():
     train_p.add_argument('--warmup-epochs', type=int, default=5,
                          help='Linear LR warmup epochs (default 5)')
     train_p.add_argument('--resume', action='store_true', default=True)
-    train_p.add_argument('--progress-file', default='./saved_models/train_progress.json')
-    train_p.add_argument('--checkpoint-dir', default='./saved_models/checkpoints')
+    train_p.add_argument('--progress-file', default=None,
+                         help='Optional custom progress file; defaults inside saved-models-folder')
+    train_p.add_argument('--checkpoint-dir', default=None,
+                         help='Optional checkpoint dir; defaults inside saved-models-folder')
     train_p.add_argument('--sync-cmd', default=os.environ.get('TRANSFORMER_SYNC_CMD', ''))
     train_p.add_argument('--sync-every-n', type=int, default=1)
     train_p.add_argument('--smoke-test', action='store_true',
                          help='1 model, 1 epoch — quick shape/interface check')
     train_p.set_defaults(func=train_command)
 
+    # ---- train-diagnostic ----
+    train_diag_p = subparsers.add_parser(
+        'train-diagnostic',
+        help='Train the combined 0C + 0B fair small-model transformer grid'
+    )
+    train_diag_p.add_argument('--data-folder', default='../LSTM_Research/datasets/LM-training-datasets')
+    train_diag_p.add_argument('--saved-models-folder', default='./saved_models_pathwise_small')
+    train_diag_p.add_argument('--epochs', type=int, default=200)
+    train_diag_p.add_argument('--batch-size', type=int, default=128)
+    train_diag_p.add_argument('--lr', type=float, default=1e-3)
+    train_diag_p.add_argument('--clip', type=float, default=0.25)
+    train_diag_p.add_argument('--early-stopping-patience', type=int, default=10)
+    train_diag_p.add_argument('--weight-decay', type=float, default=1e-4,
+                              help='Adam L2 regularisation (default 1e-4)')
+    train_diag_p.add_argument('--warmup-epochs', type=int, default=5,
+                              help='Linear LR warmup epochs (default 5)')
+    train_diag_p.add_argument('--resume', action='store_true', default=True)
+    train_diag_p.add_argument('--progress-file', default=None,
+                              help='Optional custom progress file; defaults inside saved-models-folder')
+    train_diag_p.add_argument('--checkpoint-dir', default=None,
+                              help='Optional checkpoint dir; defaults inside saved-models-folder')
+    train_diag_p.add_argument('--sync-cmd', default=os.environ.get('TRANSFORMER_SYNC_CMD', ''))
+    train_diag_p.add_argument('--sync-every-n', type=int, default=1)
+    train_diag_p.add_argument('--smoke-test', action='store_true',
+                              help='1 model, 1 epoch — quick shape/interface check')
+    train_diag_p.set_defaults(func=train_diagnostic_command)
+
     # ---- evaluate ----
-    eval_p = subparsers.add_parser('evaluate', help='Evaluate trained transformer models')
+    eval_p = subparsers.add_parser('evaluate', help='Evaluate trained V2 transformer models')
     eval_p.add_argument('--data-folder', default='../LSTM_Research/datasets/LM-training-datasets')
-    eval_p.add_argument('--saved-models-folder', default='./saved_models')
+    eval_p.add_argument('--saved-models-folder', default='./saved_models_pathwise')
     eval_p.add_argument('--wordlist-file', default='../LSTM_Research/chosen_wordlists/big_wfuzz.txt')
     eval_p.add_argument('--request-limit', type=int, default=100_000)
     eval_p.add_argument('--prediction-sweep', nargs='+', type=int,
@@ -332,7 +382,7 @@ def main():
     eval_p.add_argument('--beam-width', type=int, default=1,
                         help='Beam search width (default=1 = greedy top-K). '
                              'Set >1 to enable beam search (e.g. --beam-width 5)')
-    eval_p.add_argument('--results-folder', default='./results')
+    eval_p.add_argument('--results-folder', default='./results_pathwise')
     eval_p.set_defaults(func=evaluate_command)
 
     args = parser.parse_args()
