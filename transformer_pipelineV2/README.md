@@ -1,419 +1,311 @@
 # DirHunterT Transformer Pipeline V2
 
-DirHunterT-A V2 keeps the same decoder-only transformer architecture and the
-same evaluation loop as V1, but fixes the training regime:
+`transformer_pipelineV2/` is the fair-comparison transformer pipeline for the DirHunterT project.
 
-- V1 trained on a flattened token stream shared with the LSTM pipeline
-- V2 trains on **independent padded paths** via a proper PyTorch `DataLoader`
-- This removes the recurrent hidden-state carry-over advantage from the A/B comparison
+V1 reused the LSTM-style flat token stream during training. V2 fixes that by training on one padded path per sample, which gives the transformer clean per-path depth positions and removes the LSTM-specific hidden-state training advantage from the comparison.
 
-Runs on the **same GCP Spot V100 infrastructure** as the LSTM pipeline.
+The current active plan is:
 
-Grid search: **144 model combinations**.
-Produces **4 best models** — one per `(max_depth, min_freq)` global pair — for direct comparison with LSTM.
+1. Run the combined `0C + 0B` diagnostic first.
+2. Evaluate it against LSTM and Transformer V1.
+3. Run calibration or larger follow-up experiments only if the fair V2 result justifies it.
 
-Recommended first experiment:
+For the detailed research framing, see [Next_Plan.md](../Next_Plan.md).
 
-- `python main.py train-diagnostic`
-- this combines the fair V2 training regime with the small-model diagnostic grid
+## What V2 Changes
 
----
+V2 keeps the same model family and attack/evaluation loop as V1, but changes the training regime:
 
-## Architecture Quick Reference
+- each training sample is one padded path
+- batches come from a proper `DataLoader`
+- training uses `src = sequence[:-1]` and `target = sequence[1:]`
+- loss is computed only on non-pad target tokens
+- progress files are tagged by training regime so old V1 progress is ignored
 
-| Component | Detail |
-|-----------|--------|
-| Model | Decoder-only transformer (causal self-attention) |
-| Tokenizer | Same vocabulary and path tokenization as LSTM |
-| Position encoding | Learnable depth embeddings (not sinusoidal) |
-| Segment embeddings | 8 structural categories — **see warning below** |
-| Training regime | **Path-wise** batches, one padded path per sample |
-| Hyperparameter grid | `d_model`×`n_heads`×`n_layers`×`dropout` = 36 arch × 4 global = 144 total |
-| Reused from LSTM | `attacks.py`, `tree_builder.py`, `plot_tables.py` |
+This makes V2 the correct place to answer:
 
----
+**Can a fairly trained transformer beat the LSTM baseline on this dataset?**
 
-## ⚠️ Segment Embedding Diagnostic (run before training)
+## Commands
 
-Segment type embeddings classify each directory token into one of 8 structural categories (API, Admin, Content, etc.). This only helps if the vocabulary is small enough for the keyword lists to cover a meaningful fraction of tokens.
+The V2 CLI has three commands:
 
-**Run the diagnostic first:**
+- `train-diagnostic`: combined `0C + 0B`, recommended first run
+- `train`: full fair V2 grid
+- `evaluate`: run attack-time evaluation for saved V2 models
+
+Check the CLI:
 
 ```bash
-source ../.venv/bin/activate
-python3 -c "
-import sys
-sys.path.insert(0, '../lstm_pipeline')
-sys.path.insert(0, '.')
-from lstm_pipeline.src.data import load_datasets, create_vocabulary
-from src.model import diagnose_segment_coverage
-train_df, _, _ = load_datasets('../lstm_Research/datasets/LM-training-datasets')
-vocab = create_vocabulary(train_df, min_freq=3, max_depth=10)
-print(f'Vocab size: {len(vocab)}')
-diagnose_segment_coverage(vocab)
-"
+cd /home/jeevan/HunterT/transformer_pipelineV2
+../.venv/bin/python3 main.py --help
 ```
 
-**Actual results (measured 2026-03-15):**
+## Recommended Workflow
 
-| Global params | Vocab size | Type-7 (unknown) | Signal types 0–6 |
-|--------------|-----------|-----------------|-----------------|
-| MF=3, MD=10 | 40,717 | **98.9%** ⚠️ | 1.1% |
-| MF=5, MD=10 | 24,507 | **98.2%** ⚠️ | 1.8% |
-| MF=3, MD=5  | 36,724 | **98.8%** ⚠️ | 1.2% |
-| MF=5, MD=5  | 22,170 | **98.1%** ⚠️ | 1.9% |
+### 1. Smoke test the combined `0C + 0B` path
 
-**Interpretation:** The vocabulary is 22K–40K domain-specific directory strings (not the ~150 tokens assumed during design). Segment embeddings cover only ~1% of tokens — the remaining 99% all receive the same type-7 embedding. This means the segment embedding adds a near-constant bias to every forward pass: **effectively zero signal.**
-
-**Resolution:** Segment embeddings are disabled in the model's forward pass for this run (type-7 tokens receive a zeroed embedding via the `disable_segment_emb` flag — see model.py). The real architectural advantages — full causal attention and depth embeddings — are unaffected. Segment embeddings remain in the architecture for a future BPE-tokenized variant where vocab size (~2K–4K) would allow meaningful coverage.
-
----
-
-## What Changed From V1
-
-V1 and the LSTM pipeline both rely on a flat tensor loader that reshapes the
-entire corpus into `(batch_size, num_batches)` and then slices fixed windows.
-That setup is acceptable for recurrent language-model baselines, but it is a
-poor fit for a depth-aware transformer.
-
-V2 replaces only the training loader:
-
-- Each sample is one padded path: `<sos> ... <eos> <pad> ...`
-- Training uses `src = sequence[:-1]`, `target = sequence[1:]`
-- Training batches are shuffled path-wise
-- Evaluation and attack simulation are unchanged
-
-## Environment Setup
-
-Uses the **same venv** as the LSTM pipeline — no new dependencies needed.
+This is the fastest way to confirm the environment, data path, and new path-wise regime are wired correctly.
 
 ```bash
-cd ~/HunterT/lstm_pipeline
-source .venv/bin/activate
-cd ~/HunterT/transformer_pipelineV2
-```
+cd /home/jeevan/HunterT/transformer_pipelineV2
 
-Verify imports are clean:
-
-```bash
-python main.py --help
-```
-
----
-
-## GCS Bucket
-
-Uses the **same bucket** already created for the LSTM run.
-Transformer V2 artifacts should go under a separate prefix such as `transformer_v2/`.
-
-If bucket does not exist yet (first time):
-
-```bash
-cd ~/HunterT/infra
-BUCKET_NAME=dirhuntert-transformer ./create_storage.sh
-```
-
----
-
-## 1) Smoke Test (2 minutes)
-
-Run before committing to a full cloud training session.
-Trains 1 model for 1 epoch and verifies shapes and file outputs.
-
-```bash
-cd ~/HunterT/transformer_pipelineV2
-python3 main.py train \
+../.venv/bin/python3 main.py train-diagnostic \
   --smoke-test \
   --data-folder ../LSTM_Research/datasets/LM-training-datasets \
-  --saved-models-folder ./saved_models_pathwise_smoke
+  --saved-models-folder ./saved_models_pathwise_small_smoke
 ```
 
-Expected outputs:
+`--smoke-test` reduces the run to one global setting, one architecture setting, and one epoch.
 
-```
-saved_models_pathwise_smoke/checkpoints/combo_MD5_MF3_dm128_nh4_nl4_dr0.2.pt
-saved_models_pathwise_smoke/model_MD5_MF3_dm128_nh4_nl4_dr0.2_loss....pt
-saved_models_pathwise_smoke/train_progress.json
-```
+### 2. Run the combined `0C + 0B` diagnostic
 
----
-
-## 2) Recommended First Run: Combined 0C + 0B
-
-This is the preferred first experiment now.
+This is the main first experiment.
 
 It combines:
 
-- `0C`: fair path-wise transformer training
-- `0B`: small-model diagnostic grid
-
-Command:
+- `0C`: fair path-wise training
+- `0B`: smaller transformer capacity search
 
 ```bash
-cd ~/HunterT/transformer_pipelineV2
-python3 main.py train-diagnostic \
+cd /home/jeevan/HunterT/transformer_pipelineV2
+
+../.venv/bin/python3 main.py train-diagnostic \
   --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models_pathwise_small
 ```
 
-Then evaluate it with the same evaluation command:
+Diagnostic grid:
+
+- global parameters:
+  - `max_depth = [5, 10]`
+  - `min_freq = [3, 5]`
+- architecture parameters:
+  - `d_model = [64, 128]`
+  - `n_heads = [2, 4]`
+  - `n_layers = [2, 3]`
+  - `dropout = [0.2, 0.4]`
+
+Total combinations:
+
+- `4` global settings
+- `16` architecture settings
+- `64` model combinations total
+
+As in the LSTM pipeline, the best model for each `(max_depth, min_freq)` pair is kept as the final saved model. That means the final saved-model folder should contain up to `4` best-model `.pt` files, plus the progress file and checkpoint subdirectory.
+
+### 3. Evaluate the saved V2 diagnostic models
 
 ```bash
-python3 main.py evaluate \
+cd /home/jeevan/HunterT/transformer_pipelineV2
+
+../.venv/bin/python3 main.py evaluate \
   --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models_pathwise_small \
   --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
   --results-folder ./results_pathwise_small
 ```
 
-What this answers fastest:
+This writes:
 
-- does fair training help?
-- are smaller transformers a better fit?
+- `eval_results_transformer.csv`
+- `eval_results_transformer_best.csv`
 
----
+under `./results_pathwise_small/`.
 
-## 3) Full Training — Resumable, Spot-Safe (5–15 hours)
-
-```bash
-cd ~/HunterT/transformer_pipelineV2
-python main.py train \
-  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
-  --saved-models-folder ./saved_models_pathwise \
-  --resume \
-  --sync-cmd "gsutil -m rsync -r ./saved_models_pathwise gs://dirhuntert-transformer/transformer_v2/saved_models_pathwise" \
-  --sync-every-n 1
-```
-
-Or set the sync command as an environment variable:
+### 4. Compare against the LSTM baseline
 
 ```bash
-export TRANSFORMER_SYNC_CMD='gsutil -m rsync -r ./saved_models_pathwise gs://dirhuntert-transformer/transformer_v2/saved_models_pathwise'
-python main.py train --resume
-```
+cd /home/jeevan/HunterT/lstm_pipeline
 
-What happens:
-- 144 model combinations trained (4 global × 36 arch)
-- After each combo: checkpoint saved + GCS sync runs
-- If preempted and restarted: completed combos are skipped automatically
-- 4 best models saved (one per global param pair)
-
----
-
-## 4) Evaluation — Same Protocol as LSTM (2–8 hours)
-
-Run after training completes. Uses the same 119 test domains, same prediction sweep, same 100K request budget as the LSTM evaluation.
-
-```bash
-cd ~/HunterT/transformer_pipelineV2
-python main.py evaluate \
-  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
-  --saved-models-folder ./saved_models_pathwise \
-  --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
-  --prediction-sweep 100 250 500 750 1000 2000 5000 10000 \
-  --results-folder ./results_pathwise
-```
-
-Outputs:
-
-```
-results_pathwise/eval_results_transformer.csv       — all runs
-results_pathwise/eval_results_transformer_best.csv  — best prediction_limit per domain/model
-```
-
----
-
-## 5) Compare Transformer vs LSTM Results
-
-After both LSTM and transformer evaluations are done, run the LSTM plot script with both CSVs. It generates all existing LSTM tables **plus** two new comparison tables.
-
-```bash
-cd ~/HunterT/lstm_pipeline
-python plot_tables.py \
+../.venv/bin/python3 plot_tables.py \
   --results-csv ./results/eval_results.csv \
-  --transformer-results ../transformer_pipelineV2/results_pathwise/eval_results_transformer_best.csv \
+  --transformer-results ../transformer_pipelineV2/results_pathwise_small/eval_results_transformer_best.csv \
   --output-dir ./results/figures
 ```
 
-New outputs produced when `--transformer-results` is given:
+This is the current decision point. If the fair small-model V2 run still loses clearly, then the next question is whether calibration or context-aware modeling is worth the extra work.
 
-```
-results/figures/table_lstm_vs_transformer.png   — BF Baseline | LSTM | DirHunterT-A | Gain %
-results/figures/table_gate_check.png            — PASS/FAIL per sector (>30% over LSTM)
-```
+## Full Fair V2 Grid
 
-The gate check result is also printed to the terminal immediately:
-
-```
-==================================================
-GATE CHECK RESULT
-==================================================
-    Sector  LSTM hits  DirHunterT-A  Gain %  Gate >30%
-University      90.0         130.0  +44.4%    PASS ✓
- Hospitals     175.0         240.0  +37.1%    PASS ✓
- Companies      89.0         120.0  +34.8%    PASS ✓
-Government     128.0         175.0  +36.7%    PASS ✓
-ALL (mean)     120.5         166.3  +38.0%    PASS ✓
-==================================================
-GATE PASSED — proceed to Model B
-==================================================
-```
-
----
-
-## Running on Spot VM (Full Workflow)
-
-### Step 1 — Create the VM (V100 Spot infra)
+Run this only after the diagnostic pass if you want the larger non-diagnostic V2 grid.
 
 ```bash
-cd ~/HunterT/infra_T
-./create_infra.sh
+cd /home/jeevan/HunterT/transformer_pipelineV2
+
+../.venv/bin/python3 main.py train \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
+  --saved-models-folder ./saved_models_pathwise
 ```
 
-### Step 2 — SSH into the VM
+Full grid:
+
+- global parameters:
+  - `max_depth = [5, 10]`
+  - `min_freq = [3, 5]`
+- architecture parameters:
+  - `d_model = [128, 256, 512]`
+  - `n_heads = [4, 8]`
+  - `n_layers = [4, 6]`
+  - `dropout = [0.2, 0.4, 0.6]`
+
+Total combinations:
+
+- `4` global settings
+- `36` architecture settings
+- `144` model combinations total
+
+Evaluate the full grid outputs with:
 
 ```bash
-gcloud compute ssh lstm-v100-vm-transformer --zone us-central1-a --project dirhunter-t
-```
+cd /home/jeevan/HunterT/transformer_pipelineV2
 
-### Step 3 — Set up environment on VM
-
-```bash
-# Clone or copy repo (skip if already there from LSTM run)
-cd ~/HunterT
-
-# Activate venv (already installed from LSTM run)
-source lstm_pipeline/.venv/bin/activate
-
-# Verify GPU
-nvidia-smi
-```
-
-### Step 4 — Restore any previous V2 artifacts (if resuming after preemption)
-
-```bash
-cd ~/HunterT/transformer_pipelineV2
-gsutil -m rsync -r gs://dirhuntert-transformer/transformer_v2/saved_models_pathwise ./saved_models_pathwise
-```
-
-### Step 5 — Start tmux and run training
-
-```bash
-tmux new -s transformer
-
-cd ~/HunterT/transformer_pipelineV2
-python main.py train \
+../.venv/bin/python3 main.py evaluate \
   --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models_pathwise \
-  --resume \
-  --sync-cmd "gsutil -m rsync -r ./saved_models_pathwise gs://dirhuntert-transformer/transformer_v2/saved_models_pathwise" \
-  --sync-every-n 1
-
-# Detach:  Ctrl+B then D
-# Reattach: tmux attach -t transformer
+  --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
+  --results-folder ./results_pathwise
 ```
 
-### Step 6 — Optional: Preemption watcher (second tmux pane)
+## Evaluation Options
 
-Reuses the same `preempt_watch.sh` from the LSTM pipeline.
+`evaluate` supports both temperature sweeps and beam search.
+
+Temperature sweep example:
 
 ```bash
-# In a second tmux pane (Ctrl+B then %)
-cd ~/HunterT/lstm_pipeline
-export SYNC_CMD='gsutil -m rsync -r ../transformer_pipelineV2/saved_models_pathwise gs://dirhuntert-transformer/transformer_v2/saved_models_pathwise'
-./preempt_watch.sh
-```
+cd /home/jeevan/HunterT/transformer_pipelineV2
 
-Watcher polls every 5 seconds. On preemption signal (~30s notice), it triggers an emergency GCS sync before the VM shuts down.
-
----
-
-## Spot Recovery Runbook
-
-If the VM is preempted, follow this exact sequence.
-
-**1. Recreate VM:**
-```bash
-cd ~/HunterT/infra_T
-./create_infra.sh
-```
-
-**2. SSH into new VM:**
-```bash
-gcloud compute ssh lstm-v100-vm-transformer --zone us-central1-a --project dirhunter-t
-```
-
-**3. Restore Python environment:**
-```bash
-cd ~/HunterT/lstm_pipeline
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r ../requirements.txt
-```
-
-**4. Restore transformer V2 artifacts from GCS:**
-```bash
-cd ~/HunterT/transformer_pipelineV2
-gsutil -m rsync -r gs://dirhuntert-transformer/transformer_v2/saved_models_pathwise ./saved_models_pathwise
-```
-
-**5. Resume training — completed combos are skipped automatically:**
-```bash
-python main.py train \
+../.venv/bin/python3 main.py evaluate \
   --data-folder ../LSTM_Research/datasets/LM-training-datasets \
-  --saved-models-folder ./saved_models_pathwise \
-  --resume \
-  --sync-cmd "gsutil -m rsync -r ./saved_models_pathwise gs://dirhuntert-transformer/transformer_v2/saved_models_pathwise" \
-  --sync-every-n 1
+  --saved-models-folder ./saved_models_pathwise_small \
+  --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
+  --prediction-sweep 500 750 1000 \
+  --temperature-sweep 0.5 0.7 0.8 0.9 1.0 1.2 1.5 2.0 \
+  --results-folder ./results_pathwise_small_temp
 ```
 
----
+Beam-search example:
 
-## Cost and Time Estimates
+```bash
+cd /home/jeevan/HunterT/transformer_pipelineV2
 
+../.venv/bin/python3 main.py evaluate \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
+  --saved-models-folder ./saved_models_pathwise_small \
+  --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
+  --prediction-sweep 500 1000 \
+  --beam-width 5 \
+  --results-folder ./results_pathwise_small_beam5
+```
 
-| Phase | Duration | Cost (Spot V100) |
-|-------|----------|------------------|
-| Smoke test | ~2 min | ~$0.02 |
-| Full training (144 models) | 10–24 hours | ~$25–50 |
-| Evaluation (119 domains) | 2–6 hours | ~$5–10 |
-| **Total** | **~9–24 hours** | **~$25–50** |
+Default evaluation settings:
 
-Transformer training is faster per model than LSTM (no truncated BPTT, GPU-parallel attention).
+- `prediction_sweep = [100, 250, 500, 750, 1000, 2000, 5000, 10000]`
+- `temperature_sweep = [1.0]`
+- `beam_width = 1`
+- `request_limit = 100000`
 
----
+## Artifact Layout
 
-## Gate Check — Must Pass Before Model B
+Recommended folders:
 
-After evaluation, check these minimum thresholds:
+- diagnostic training outputs:
+  - `./saved_models_pathwise_small/`
+- diagnostic evaluation outputs:
+  - `./results_pathwise_small/`
+- full-grid training outputs:
+  - `./saved_models_pathwise/`
+- full-grid evaluation outputs:
+  - `./results_pathwise/`
 
-| Sector | LSTM baseline | Model A must exceed |
-|--------|--------------|---------------------|
-| HOS | 175 | **228** (+30%) |
-| UNI | 90 | **117** (+30%) |
-| COM | 89 | **116** (+30%) |
-| GOV | 128 | **166** (+30%) |
+Inside each saved-model folder:
 
-If any sector misses: compare V2 path-wise results to V1 first. If V2 still misses badly, move to the small-model and context-aware ablations before starting Model B.
+- best-model `.pt` files for each `(max_depth, min_freq)` pair
+- `train_progress.json`
+- `checkpoints/` for per-combination checkpoints
 
----
+Resume behavior:
+
+- training resumes automatically from `train_progress.json`
+- progress files are regime-tagged
+- V2 ignores old V1 progress files instead of silently skipping work
+
+## Segment Embeddings
+
+The model still contains segment-type embeddings, but V2 automatically disables them when the vocabulary becomes too large:
+
+- `disable_segment_emb = True` when `vocab_size > 5000`
+
+This matches both training and evaluation. The reason is simple: on large domain-specific vocabularies, the keyword-based segment categories do not cover enough tokens to be a reliable source of signal.
+
+If you want to inspect segment coverage explicitly, run the helper in [`src/model.py`](./src/model.py) from the repository root:
+
+```bash
+cd /home/jeevan/HunterT
+
+./.venv/bin/python3 - <<'PY'
+from lstm_pipeline.src.data import load_datasets, create_vocabulary
+from transformer_pipelineV2.src.model import diagnose_segment_coverage
+
+train_df, _, _ = load_datasets("LSTM_Research/datasets/LM-training-datasets")
+vocab = create_vocabulary(train_df, min_freq=3, max_depth=5)
+diagnose_segment_coverage(vocab)
+PY
+```
+
+## Spot VM / Sync Support
+
+Both training commands support periodic sync with an external command:
+
+- `--sync-cmd`
+- `--sync-every-n`
+
+Example:
+
+```bash
+cd /home/jeevan/HunterT/transformer_pipelineV2
+
+../.venv/bin/python3 main.py train-diagnostic \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
+  --saved-models-folder ./saved_models_pathwise_small \
+  --sync-cmd "gsutil -m rsync -r ./saved_models_pathwise_small gs://dirhuntert-transformer/transformer_v2/saved_models_pathwise_small" \
+  --sync-every-n 4
+```
+
+You can also set the sync command through `TRANSFORMER_SYNC_CMD`.
+```bash
+export TRANSFORMER_SYNC_CMD='gsutil -m rsync -r ./saved_models_pathwise_small gs://dirhuntert-transformer/transformer_v2/saved_models_pathwise_small'
+python3 main.py train-diagnostic \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
+  --saved-models-folder ./saved_models_pathwise_small \
+  --sync-every-n 4
+  --resume
+  ```
+## Current Research Status
+
+The current active order is:
+
+1. combined `0C + 0B` in V2
+2. compare against LSTM and V1
+3. optional `0A` temperature calibration
+4. deeper analysis
+5. only then consider context-aware transformer work
+
+Older phases were not deleted from the project plan, but they are now conditional rather than immediate. The V2 README is intentionally centered on the fair-baseline question first.
 
 ## Key Files
 
-```
-transformer_pipelineV2/
-  main.py                  # CLI entry point: train + evaluate
-  src/
-    model.py               # DirHunterT: decoder-only transformer
-    inference.py           # generate() — identical interface to LSTM version
-    data.py                # Path-wise per-sample DataLoader utilities
-    training.py            # train_model() with path-wise batching
-    grid_search.py         # TransformerGridSearch — 144 combos, path-wise V2
-    utils.py               # get_transformer_hyperparams_from_filename()
+- [main.py](./main.py): CLI entry point
+- [src/data.py](./src/data.py): path-wise batching and encoding
+- [src/training.py](./src/training.py): training loop for path-wise batches
+- [src/grid_search.py](./src/grid_search.py): full fair V2 grid
+- [src/diagnostic_grid.py](./src/diagnostic_grid.py): combined `0C + 0B` diagnostic grid
+- [src/model.py](./src/model.py): DirHunterT transformer model
+- [src/inference.py](./src/inference.py): top-K and beam-search generation
 
-# Reused from lstm_pipeline/src (no modifications):
-  ../lstm_pipeline/src/attacks.py
-  ../lstm_pipeline/src/tree_builder.py
-  ../lstm_pipeline/plot_tables.py
-  ../lstm_pipeline/preempt_watch.sh
-```
+## Practical Notes
+
+- Use `train-diagnostic` first unless you are explicitly running the larger follow-up grid.
+- Do not compare new V2 results against old V1 checkpoints as if they were trained under the same regime.
+- If you are plotting LSTM vs transformer tables, compare against `eval_results_transformer_best.csv`, not the raw full sweep CSV.

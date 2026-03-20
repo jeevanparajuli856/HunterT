@@ -483,15 +483,17 @@ def main() -> None:
         print('=' * 50)
         print(gate_df[[c for c in gate_df.columns]].to_string(index=False))
         all_row = gate_df[gate_df['Sector'] == 'ALL (mean)'][gate_col].values[0]
+        sector_rows = gate_df[gate_df['Sector'] != 'ALL (mean)']
+        sector_fails = sector_rows[
+            sector_rows[gate_col].str.contains('FAIL', na=False)
+        ]['Sector'].tolist()
         print('=' * 50)
-        if 'FAIL' not in all_row:
+        if not sector_fails:
             print('GATE PASSED — proceed to Model B')
         else:
-            sector_fails = gate_df[
-                (gate_df['Sector'] != 'ALL (mean)') &
-                (gate_df[gate_col].str.contains('FAIL'))
-            ]['Sector'].tolist()
             print(f'GATE FAILED in: {sector_fails}')
+            if 'PARTIAL' in all_row:
+                print('Overall mean is not enough; sector-level gate did not clear.')
             print('Debug architecture before starting Model B.')
         print('=' * 50 + '\n')
 

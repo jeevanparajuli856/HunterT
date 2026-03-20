@@ -54,27 +54,24 @@ Completed in code:
 
 This is the new ranking for Phase 0.
 
-1. **0C: Fix the training regime**  
-   This is now the highest-priority item and the next required experiment.
+1. **0C + 0B together: fair training regime + small-model grid**  
+   This is now the highest-priority experiment and the recommended first run.
 
-2. **0B: Small model grid**  
-   Run this only if V2 still loses materially after 0C.
-
-3. **0A: Temperature sweep**  
+2. **0A: Temperature sweep**  
    Keep it, but move it down. Calibration is useful only after we have a fair V2 model worth calibrating.
 
-4. **0D: Analysis**  
-   Use this after 0C/0B/0A results exist.
+3. **0D: Analysis**  
+   Use this after 0C+0B and optional 0A results exist.
 
-5. **0d: LSTM context hack baseline**  
+4. **0d: LSTM context hack baseline**  
    Keep it as an optional research probe, not as the main next step.
 
 ## Phase 0: Active Diagnostic Plan
 
-### 0C. Fix the Training Regime
+### 0C + 0B. Combined Fair-Training Diagnostic
 
 **Priority**: 1  
-**Status**: Implemented in code, not yet fully evaluated  
+**Status**: Implemented in code, not yet evaluated end-to-end  
 **Pipeline**: `transformer_pipelineV2/`
 
 This is now the first experiment.
@@ -84,31 +81,32 @@ What changed:
 - V2 no longer uses the flat-tensor sliding window from V1
 - V2 trains on individual padded paths via a proper DataLoader
 - this removes the LSTM-specific training advantage from the comparison
+- the new diagnostic command trains a smaller transformer grid directly on top of that fair regime
 
 What it tells us:
 
-- if V2 closes most of the gap, then V1 mostly failed because of training regime
-- if V2 still loses clearly, then architecture/tokenization/capacity issues remain
+- if the diagnostic grid closes most of the gap, then V1 mostly failed because of training regime and/or oversized models
+- if the diagnostic grid still loses clearly, then architecture/tokenization issues remain more likely
 
 Run first:
 
 ```bash
 cd /home/jeevan/HunterT/transformer_pipelineV2
 
-../.venv/bin/python main.py train \
+../.venv/bin/python3 main.py train-diagnostic \
   --smoke-test \
   --data-folder ../LSTM_Research/datasets/LM-training-datasets \
-  --saved-models-folder ./saved_models_pathwise_smoke
+  --saved-models-folder ./saved_models_pathwise_small_smoke
 
-../.venv/bin/python main.py train \
+../.venv/bin/python3 main.py train-diagnostic \
   --data-folder ../LSTM_Research/datasets/LM-training-datasets \
-  --saved-models-folder ./saved_models_pathwise
+  --saved-models-folder ./saved_models_pathwise_small
 
-../.venv/bin/python main.py evaluate \
+../.venv/bin/python3 main.py evaluate \
   --data-folder ../LSTM_Research/datasets/LM-training-datasets \
-  --saved-models-folder ./saved_models_pathwise \
+  --saved-models-folder ./saved_models_pathwise_small \
   --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
-  --results-folder ./results_pathwise
+  --results-folder ./results_pathwise_small
 ```
 
 Compare against LSTM:
@@ -116,17 +114,29 @@ Compare against LSTM:
 ```bash
 cd /home/jeevan/HunterT/lstm_pipeline
 
-../.venv/bin/python plot_tables.py \
+../.venv/bin/python3 plot_tables.py \
   --results-csv ./results/eval_results.csv \
-  --transformer-results ../transformer_pipelineV2/results_pathwise/eval_results_transformer_best.csv \
+  --transformer-results ../transformer_pipelineV2/results_pathwise_small/eval_results_transformer_best.csv \
   --output-dir ./results/figures
 ```
 
+### 0C. Fix the Training Regime
+
+**Status**: Implemented and active inside the combined diagnostic run
+
+Purpose:
+
+- make the transformer comparison fair by training on path-wise batches instead of the V1 flat-stream regime
+
+Current implementation:
+
+- `transformer_pipelineV2/src/data.py`
+- `transformer_pipelineV2/src/training.py`
+- `transformer_pipelineV2/src/grid_search.py`
+
 ### 0B. Small Model Grid Search
 
-**Priority**: 2  
-**Status**: Not implemented yet  
-**Run only if**: V2 still loses materially after 0C
+**Status**: Implemented and active inside the combined diagnostic run
 
 Purpose:
 
@@ -144,24 +154,23 @@ What it tells us:
 - small model >= current V2 model: over-parameterization is real
 - small model << current V2 model: capacity is not the main issue
 
-Implementation target:
+Current implementation:
 
-- add `transformer_pipelineV2/src/diagnostic_grid.py`
-- subclass `TransformerGridSearch`
-- keep the same fair path-wise V2 training regime
+- `transformer_pipelineV2/src/diagnostic_grid.py`
+- CLI command: `python main.py train-diagnostic`
 
 ### 0A. Temperature Sweep
 
-**Priority**: 3  
+**Priority**: 2  
 **Status**: Supported by CLI, but no longer the first thing to run  
-**Run only if**: 0C produces a model that is close enough to LSTM that calibration might matter
+**Run only if**: combined 0C+0B produces a model that is close enough to LSTM that calibration might matter
 
 Reframed purpose:
 
 - temperature sweep is a calibration check, not a root-cause fix
 - do not spend time calibrating V1 before measuring fair V2
 
-Use it on the best V2 models, not on the unfair V1 setup.
+Use it on the best combined 0C+0B V2 models, not on the unfair V1 setup.
 
 Suggested command:
 
@@ -170,11 +179,11 @@ cd /home/jeevan/HunterT/transformer_pipelineV2
 
 ../.venv/bin/python main.py evaluate \
   --data-folder ../LSTM_Research/datasets/LM-training-datasets \
-  --saved-models-folder ./saved_models_pathwise \
+  --saved-models-folder ./saved_models_pathwise_small \
   --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
   --temperature-sweep 0.5 0.7 0.8 0.9 1.0 1.2 1.5 2.0 \
   --prediction-sweep 500 750 1000 \
-  --results-folder ./results_pathwise_temp
+  --results-folder ./results_pathwise_small_temp
 ```
 
 What it tells us:
@@ -185,10 +194,10 @@ What it tells us:
 
 ### 0D. Analysis
 
-**Priority**: 4  
+**Priority**: 3  
 **Status**: Not implemented yet
 
-After 0C and optional 0B/0A, create one simple analysis script to summarize:
+After combined 0C+0B and optional 0A, create one simple analysis script to summarize:
 
 - V2 vs LSTM
 - V2 vs V1
@@ -203,7 +212,7 @@ Suggested output:
 
 ### 0d. LSTM Context Hack Baseline
 
-**Priority**: 5  
+**Priority**: 4  
 **Status**: Optional, not blocking
 
 Keep this phase, but reframe it:
@@ -225,14 +234,14 @@ If it gives clear gain:
 
 ## Phase 0 Gate
 
-Use this decision rule after 0C and optional follow-ups.
+Use this decision rule after combined 0C+0B and optional follow-ups.
 
 ### Continue with non-context transformer work if any of these happen
 
-- V2 beats LSTM overall
-- V2 materially narrows the gap
-- V2 shows clear sector wins that justify more tuning
-- small-model V2 improves meaningfully over default V2
+- combined 0C+0B V2 beats LSTM overall
+- combined 0C+0B V2 materially narrows the gap
+- combined 0C+0B V2 shows clear sector wins that justify more tuning
+- smaller V2 models improve meaningfully over the larger V2 baseline
 
 ### Escalate to context-aware transformer only if both are true
 
@@ -297,4 +306,4 @@ Do not invest in deployment until the research question is settled.
 
 ## Current Plan In One Sentence
 
-Run fair V2 first, run small-model V2 second if needed, keep temperature sweep as a later calibration check, and leave the context-aware rebuild deferred unless fair V2 still fails.
+Run combined 0C+0B first in V2, keep temperature sweep as a later calibration check, and leave the context-aware rebuild deferred unless the combined fair small-model V2 run still fails.
