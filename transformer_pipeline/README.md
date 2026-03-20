@@ -96,7 +96,7 @@ Trains 1 model for 1 epoch and verifies shapes and file outputs.
 
 ```bash
 cd ~/HunterT/transformer_pipeline
-python main.py train \
+python3 main.py train \
   --smoke-test \
   --data-folder ../LTSM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models
