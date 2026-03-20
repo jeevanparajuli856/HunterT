@@ -30,7 +30,7 @@ sudo apt-get install -y gettext-base
 
 | Setting | Default |
 |---------|---------|
-| `DEPLOYMENT_NAME` | `ltsm-v100-transformer` |
+| `DEPLOYMENT_NAME` | `lstm-v100-transformer` |
 | `MACHINE_TYPE` | `custom-12-46080` (12 vCPU, 45 GB RAM) |
 | `GPU_TYPE` | `nvidia-tesla-v100` |
 | `DISK_SIZE_GB` | `200` (SSD) |
@@ -68,7 +68,7 @@ BUCKET_NAME=dirhuntert-artifacts ./destroy_storage.sh
 ./create_infra.sh
 
 # Script prints SSH command on success, e.g.:
-#   gcloud compute ssh ltsm-v100-transformer-vm --zone us-central1-b --project <PROJECT_ID>
+#   gcloud compute ssh lstm-v100-transformer-vm --zone us-central1-b --project <PROJECT_ID>
 
 # Destroy
 ./destroy_infra.sh

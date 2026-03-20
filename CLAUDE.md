@@ -101,6 +101,6 @@ PyTorch 2.1.0 (CUDA 12.1), torchtext 0.16.0, anytree. Full list in `requirements
 - If I said something is not good update it in Claude.md under user-preferred rules section and let me know after process end with brief summary
 
 ##User-Preferred Rules
-- Use `python3` instead of `python` in all commands for consistency and to avoid
-- Use venv which is at root of this directory for all Python dependencies to prevent conflicts with system packages
+- Use `python3` instead of `python` in all commands for consistency and to avoid conflicts with system Python versions
+- Use .venv which is at root of this directory for all Python dependencies to prevent conflicts with system packages
 

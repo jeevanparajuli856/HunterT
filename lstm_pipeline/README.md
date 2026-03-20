@@ -1,4 +1,4 @@
-# LTSM Pipeline Usage
+# LSTM Pipeline Usage
 
 This pipeline reproduces the paper-style LSTM baseline and evaluates:
 
@@ -29,15 +29,15 @@ Create a bucket once from the infra folder:
 
 ```bash
 cd ../infra
-BUCKET_NAME=dir-huntert-ltsm ./create_storage.sh
+BUCKET_NAME=dir-huntert-lstm ./create_storage.sh
 ```
 
 On a fresh Spot VM, restore artifacts before resuming:
 
 ```bash
 cd ../ltsm_pipeline
-gsutil -m rsync -r gs://dir-huntert-ltsm/ltsm/saved_models ./saved_models
-gsutil -m rsync -r gs://dir-huntert-ltsm/ltsm/results ./results
+gsutil -m rsync -r gs://dir-huntert-lstm/lstm/saved_models ./saved_models
+gsutil -m rsync -r gs://dir-huntert-lstm/lstm/results ./results
 ```
 
 ## 1) Smoke Test (quick sanity - 2 minutes)
@@ -100,14 +100,14 @@ Optional periodic sync to GCS after each trained combo:
 ```bash
 python main.py train \
   --resume \
-  --sync-cmd "gsutil -m rsync -r ./saved_models gs://YOUR_BUCKET/ltsm/saved_models && gsutil -m rsync -r ./results gs://YOUR_BUCKET/ltsm/results" \
+  --sync-cmd "gsutil -m rsync -r ./saved_models gs://YOUR_BUCKET/lstm/saved_models && gsutil -m rsync -r ./results gs://YOUR_BUCKET/lstm/results" \
   --sync-every-n 1
 ```
 
 You can also set sync command via env var:
 
 ```bash
-export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-ltsm/ltsm/saved_models'
+export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-lstm/lstm/saved_models'
 python main.py train --resume
 ```
 
@@ -153,7 +153,7 @@ In a second tmux pane/session:
 ```bash
 cd ~/HunterT/ltsm_pipeline
 chmod +x preempt_watch.sh
-export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-ltsm/ltsm/saved_models && gsutil -m rsync -r ./results gs://dir-huntert-ltsm/ltsm/results'
+export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-lstm/lstm/saved_models && gsutil -m rsync -r ./results gs://dir-huntert-lstm/lstm/results'
 ./preempt_watch.sh
 ```
 

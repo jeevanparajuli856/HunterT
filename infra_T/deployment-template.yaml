@@ -42,7 +42,7 @@ resources:
 
     tags:
       items:
-      - ltsm
+      - lstm
       - ssh
 
     metadata:

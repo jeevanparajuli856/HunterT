@@ -1,5 +1,5 @@
 resources:
-- name: ltsm-t4-vm
+- name: lstm-t4-vm
   type: compute.v1.instance
   properties:
     zone: us-central1-a
@@ -39,7 +39,7 @@ resources:
 
     tags:
       items:
-      - ltsm
+      - lstm
       - ssh
 
     metadata:

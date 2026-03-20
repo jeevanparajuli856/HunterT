@@ -51,13 +51,13 @@ BUCKET_NAME=dirhuntert-transformer ./destroy_storage.sh
 
 # Script prints the zone it succeeded in, e.g.:
 #   VM created: T4 Spot in us-east1-b
-#   gcloud compute ssh ltsm-t4-transformer-vm --zone us-east1-b --project dirhunter-t
+#   gcloud compute ssh lstm-t4-transformer-vm --zone us-east1-b --project dirhunter-t
 
 # Destroy
 ./destroy_infra.sh
 ```
 
-Defaults: `DEPLOYMENT_NAME=ltsm-t4-transformer`, `MACHINE_TYPE=n1-standard-4`, `DISK_SIZE_GB=200`.
+Defaults: `DEPLOYMENT_NAME=lstm-t4-transformer`, `MACHINE_TYPE=n1-standard-4`, `DISK_SIZE_GB=200`.
 Zones tried in order: `us-central1-a/b → us-east1-b/c → us-east4-b → europe-west4-b → asia-southeast1-b`.
 
 ---
@@ -125,4 +125,4 @@ python3 main.py train --resume \
   --sync-every-n 1
 ```
 
-  gcloud compute config-ssh ltsm-t4-transformer-vm --zone us-central1-a --project dirhunter-t
+  gcloud compute config-ssh lstm-t4-transformer-vm --zone us-central1-a --project dirhunter-t

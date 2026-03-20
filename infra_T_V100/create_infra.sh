@@ -16,7 +16,7 @@ if ! command -v envsubst >/dev/null 2>&1; then
 fi
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)}"
-DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-ltsm-v100-transformer}"
+DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-lstm-v100-transformer}"
 MACHINE_TYPE="${MACHINE_TYPE:-custom-12-46080}"
 GPU_TYPE="${GPU_TYPE:-nvidia-tesla-v100}"
 DISK_SIZE_GB="${DISK_SIZE_GB:-200}"

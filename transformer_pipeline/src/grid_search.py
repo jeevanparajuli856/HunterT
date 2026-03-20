@@ -31,13 +31,13 @@ import sys
 _ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
-from ltsm_pipeline.src.data import load_datasets, get_dataloaders
+from lstm_pipeline.src.data import load_datasets, get_dataloaders
 
 
 class TransformerGridSearch:
     """
     Grid search trainer for DirHunterT transformer models.
-    API mirrors ltsm_pipeline GridSearchTrainer for easy switching.
+    API mirrors lstm_pipeline GridSearchTrainer for easy switching.
     """
 
     def __init__(self, data_folder, saved_models_folder, device=None,

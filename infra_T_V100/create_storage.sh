@@ -18,7 +18,7 @@ fi
 
 if [[ -z "${BUCKET_NAME}" ]]; then
   echo "Error: BUCKET_NAME is required (globally unique)." >&2
-  echo "Example: BUCKET_NAME=dirhunter-t-ltsm-artifacts ./create_storage.sh" >&2
+  echo "Example: BUCKET_NAME=dirhunter-t-lstm-artifacts ./create_storage.sh" >&2
   exit 1
 fi
 
@@ -31,4 +31,4 @@ gcloud storage buckets create "gs://${BUCKET_NAME}" \
 
 echo "Bucket created: gs://${BUCKET_NAME}"
 echo "Use this sync command in training:"
-echo "--sync-cmd \"gsutil -m rsync -r ./saved_models gs://${BUCKET_NAME}/ltsm/saved_models && gsutil -m rsync -r ./results gs://${BUCKET_NAME}/ltsm/results\""
+echo "--sync-cmd \"gsutil -m rsync -r ./saved_models gs://${BUCKET_NAME}/lstm/saved_models && gsutil -m rsync -r ./results gs://${BUCKET_NAME}/lstm/results\""

@@ -1,5 +1,5 @@
 resources:
-- name: ltsm-v100-transformer-vm
+- name: lstm-v100-transformer-vm
   type: compute.v1.instance
   properties:
     zone: us-central1-b
@@ -43,7 +43,7 @@ resources:
 
     tags:
       items:
-      - ltsm
+      - lstm
       - ssh
 
     metadata:

@@ -30,7 +30,7 @@ warnings.filterwarnings(
 #   _ROOT (HunterT/)          -> enables 'ltsm_pipeline.src.*' as a full package path
 #   _HERE (transformer_pipeline/) -> enables 'src.*' for transformer's own modules
 # Both packages have a 'src' subpackage; using the full ltsm_pipeline.src.* namespace
-# avoids collision and preserves ltsm's internal relative imports.
+# avoids collision and preserves lstm's internal relative imports.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.join(_HERE, '..')
 sys.path.insert(0, _ROOT)

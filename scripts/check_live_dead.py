@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Count live vs dead domains from the provided LTSM datasets.
+"""Count live vs dead domains from the provided LSTM datasets.
 
 Default source uses LM-training split files:
 - train/train.csv

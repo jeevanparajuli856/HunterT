@@ -1,6 +1,6 @@
 # GCP Infra (YAML-based)
 
-This folder contains a simple Google Cloud Deployment Manager setup to create and destroy a Spot T4 VM for LTSM training and benchmarks.
+This folder contains a simple Google Cloud Deployment Manager setup to create and destroy a Spot T4 VM for LSTM training and benchmarks.
 
 ## Files
 
@@ -43,7 +43,7 @@ BUCKET_NAME=your-globally-unique-bucket ./create_storage.sh
 
 Defaults used by script:
 
-- `DEPLOYMENT_NAME=ltsm-t4`
+- `DEPLOYMENT_NAME=lstm-t4`
 - `ZONE=us-central1-a`
 - `MACHINE_TYPE=n1-standard-8`
 - `DISK_SIZE_GB=200`
@@ -51,7 +51,7 @@ Defaults used by script:
 3. Connect to Spot VM:
 
 ```bash
-gcloud compute ssh ltsm-t4-vm --zone us-central1-a --project YOUR_PROJECT_ID
+gcloud compute ssh lstm-t4-vm --zone us-central1-a --project YOUR_PROJECT_ID
 ```
 
 4. Setup on the Spot VM:
@@ -77,10 +77,10 @@ nvidia-smi
 5. Run in tmux (protects against disconnection):
 
 ```bash
-tmux new -s ltsm
+tmux new -s lstm
 # Now run your training commands
 # Detach with Ctrl+B then D
-# Reattach with: tmux attach -t ltsm
+# Reattach with: tmux attach -t lstm
 ```
 
 6. Destroy infra when done:
@@ -104,7 +104,7 @@ Override defaults via environment variables:
 ```bash
 cd infra
 PROJECT_ID=your-project-id \
-DEPLOYMENT_NAME=ltsm-t4 \
+DEPLOYMENT_NAME=lstm-t4 \
 ZONE=us-central1-a \
 MACHINE_TYPE=n1-standard-8 \
 DISK_SIZE_GB=200 \
@@ -115,7 +115,7 @@ Destroy a custom deployment:
 
 ```bash
 cd infra
-PROJECT_ID=your-project-id DEPLOYMENT_NAME=ltsm-t4 ./destroy_infra.sh
+PROJECT_ID=your-project-id DEPLOYMENT_NAME=lstm-t4 ./destroy_infra.sh
 ```
 
 ## Running on Spot Instances
@@ -135,7 +135,7 @@ Create bucket (one time):
 
 ```bash
 cd infra
-BUCKET_NAME=dir-huntert-ltsm ./create_storage.sh
+BUCKET_NAME=dir-huntert-lstm ./create_storage.sh
 ```
 
 Run training with periodic sync:
@@ -146,7 +146,7 @@ python main.py train \
 	--resume \
 	--progress-file ./saved_models/train_progress.json \
 	--checkpoint-dir ./saved_models/checkpoints \
-	--sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-ltsm-artifacts/ltsm/saved_models && gsutil -m rsync -r ./results gs://dirhunter-t-ltsm-artifacts/ltsm/results" \
+	--sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-lstm-artifacts/lstm/saved_models && gsutil -m rsync -r ./results gs://dirhunter-t-lstm-artifacts/lstm/results" \
 	--sync-every-n 1
 ```
 
@@ -154,8 +154,8 @@ Restore artifacts on a new Spot VM after preemption:
 
 ```bash
 cd ~/HunterT/ltsm_pipeline
-gsutil -m rsync -r gs://dir-huntert-ltsm/ltsm/saved_models ./saved_models
-gsutil -m rsync -r gs://dir-huntert-ltsm/ltsm/results ./results
+gsutil -m rsync -r gs://dir-huntert-lstm/lstm/saved_models ./saved_models
+gsutil -m rsync -r gs://dir-huntert-lstm/lstm/results ./results
 ```
 
 ## Spot Recovery Runbook
@@ -172,7 +172,7 @@ cd /home/jeevan/HunterT/infra
 2. Connect to the new VM:
 
 ```bash
-gcloud compute ssh ltsm-t4-vm --zone us-central1-a --project YOUR_PROJECT_ID
+gcloud compute ssh lstm-t4-vm --zone us-central1-a --project YOUR_PROJECT_ID
 ```
 
 3. Recreate Python environment:
@@ -188,8 +188,8 @@ pip install -r ../requirements.txt
 
 ```bash
 cd ~/HunterT/ltsm_pipeline
-gsutil -m rsync -r gs://dirhunter-t-ltsm-artifacts/ltsm/saved_models ./saved_models
-gsutil -m rsync -r gs://dirhunter-t-ltsm-artifacts/ltsm/results ./results
+gsutil -m rsync -r gs://dirhunter-t-lstm-artifacts/lstm/saved_models ./saved_models
+gsutil -m rsync -r gs://dirhunter-t-lstm-artifacts/lstm/results ./results
 ```
 
 5. Resume training:
@@ -200,17 +200,17 @@ python main.py train \
 	--resume \
 	--progress-file ./saved_models/train_progress.json \
 	--checkpoint-dir ./saved_models/checkpoints \
-	--sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-ltsm-artifacts/ltsm/saved_models && gsutil -m rsync -r ./results gs://dirhunter-t-ltsm-artifacts/ltsm/results" \
+	--sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhunter-t-lstm-artifacts/lstm/saved_models && gsutil -m rsync -r ./results gs://dirhunter-t-lstm-artifacts/lstm/results" \
 	--sync-every-n 1
 ```
 
 6. Optional: run in tmux to avoid SSH disconnect interruptions:
 
 ```bash
-tmux new -s ltsm
+tmux new -s lstm
 # run training command
 # detach: Ctrl+B then D
-# reattach: tmux attach -t ltsm
+# reattach: tmux attach -t lstm
 ```
 
 ## Notes

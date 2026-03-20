@@ -214,7 +214,7 @@ cd ~/HunterT/infra_T
 ### Step 2 — SSH into the VM
 
 ```bash
-gcloud compute ssh ltsm-v100-vm-transformer --zone us-central1-a --project dirhunter-t
+gcloud compute ssh lstm-v100-vm-transformer --zone us-central1-a --project dirhunter-t
 ```
 
 ### Step 3 — Set up environment on VM
@@ -281,7 +281,7 @@ cd ~/HunterT/infra_T
 
 **2. SSH into new VM:**
 ```bash
-gcloud compute ssh ltsm-v100-vm-transformer --zone us-central1-a --project dirhunter-t
+gcloud compute ssh lstm-v100-vm-transformer --zone us-central1-a --project dirhunter-t
 ```
 
 **3. Restore Python environment:**

@@ -10,7 +10,7 @@ BUCKET_NAME="${BUCKET_NAME:-}"
 
 if [[ -z "${BUCKET_NAME}" ]]; then
   echo "Error: BUCKET_NAME is required." >&2
-  echo "Example: BUCKET_NAME=dirhunter-t-ltsm-artifacts ./destroy_storage.sh" >&2
+  echo "Example: BUCKET_NAME=dirhunter-t-lstm-artifacts ./destroy_storage.sh" >&2
   exit 1
 fi
 

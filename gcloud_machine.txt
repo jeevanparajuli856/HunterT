@@ -1,13 +1,13 @@
-ltsm-t4-vm  compute.v1.instance  COMPLETED
-gs://dir-huntert-ltsm
-ltsm = passphrase
+lstm-t4-vm  compute.v1.instance  COMPLETED
+gs://dir-huntert-lstm
+lstm = passphrase
 
 Transformer
 gs://dir-huntert-transformer
 
-ltsm-t4-transformer-vm  compute.v1.instance  COMPLETED  []
+lstm-t4-transformer-vm  compute.v1.instance  COMPLETED  []
 
-ltsm-v100-transformer-vm  compute.v1.instance  COMPLETED  []
+lstm-v100-transformer-vm  compute.v1.instance  COMPLETED  []
 
 
 sudo apt-get update
