@@ -46,17 +46,17 @@ Override any default: `MACHINE_TYPE=n1-standard-16 ./create_infra.sh`
 
 ```bash
 # Create bucket (name must be globally unique)
-BUCKET_NAME=dirhuntert-artifacts ./create_storage.sh
+BUCKET_NAME=dirhuntert-transformer ./create_storage.sh
 
 # Upload training data (one-time)
-gsutil -m rsync -r ~/HunterT/LTSM_Research/datasets/LM-training-datasets \
-  gs://dirhuntert-artifacts/data/LM-training-datasets
+gsutil -m rsync -r ~/HunterT/LSTM_Research/datasets/LM-training-datasets \
+  gs://dirhuntert-transformer/data/LM-training-datasets
 
-gsutil -m rsync -r ~/HunterT/LTSM_Research/chosen_wordlists \
-  gs://dirhuntert-artifacts/data/wordlists
+gsutil -m rsync -r ~/HunterT/LSTM_Research/chosen_wordlists \
+  gs://dirhuntert-transformer/data/wordlists
 
 # Destroy when done
-BUCKET_NAME=dirhuntert-artifacts ./destroy_storage.sh
+BUCKET_NAME=dirhuntert-transformer ./destroy_storage.sh
 ```
 
 ---
@@ -80,11 +80,11 @@ BUCKET_NAME=dirhuntert-artifacts ./destroy_storage.sh
 
 ```bash
 # Pull repo and data from bucket
-gsutil -m rsync -r gs://dirhuntert-artifacts/repo ~/HunterT
-gsutil -m rsync -r gs://dirhuntert-artifacts/data/LM-training-datasets \
-  ~/HunterT/LTSM_Research/datasets/LM-training-datasets
-gsutil -m rsync -r gs://dirhuntert-artifacts/data/wordlists \
-  ~/HunterT/LTSM_Research/chosen_wordlists
+gsutil -m rsync -r gs://dirhuntert-transformer/repo ~/HunterT
+gsutil -m rsync -r gs://dirhuntert-transformer/data/LM-training-datasets \
+  ~/HunterT/LSTM_Research/datasets/LM-training-datasets
+gsutil -m rsync -r gs://dirhuntert-transformer/data/wordlists \
+  ~/HunterT/LSTM_Research/chosen_wordlists
 
 # Setup venv (DLVM image has driver + CUDA pre-installed, no manual install needed)
 cd ~/HunterT
@@ -105,14 +105,14 @@ python3 -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device
 
 ```bash
 source ~/HunterT/.venv/bin/activate
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 tmux new -s lstm
 
 python3 main.py train \
-  --data-folder ../LTSM_Research/datasets/LM-training-datasets \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
   --resume \
-  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhuntert-artifacts/lstm/saved_models" \
+  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhuntert-transformer/lstm/saved_models" \
   --sync-every-n 1
 
 # Detach: Ctrl+B then D  |  Reattach: tmux attach -t lstm
@@ -126,10 +126,10 @@ cd ~/HunterT/transformer_pipeline
 tmux new -s transformer
 
 python3 main.py train \
-  --data-folder ../LTSM_Research/datasets/LM-training-datasets \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
   --resume \
-  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhuntert-artifacts/transformer/saved_models" \
+  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhuntert-transformer/transformer/saved_models" \
   --sync-every-n 1
 
 # Detach: Ctrl+B then D  |  Reattach: tmux attach -t transformer
@@ -141,19 +141,19 @@ python3 main.py train \
 
 ```bash
 # LSTM
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 python3 main.py evaluate \
-  --data-folder ../LTSM_Research/datasets/LM-training-datasets \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
-  --wordlist ../LTSM_Research/chosen_wordlists/big_wfuzz.txt \
+  --wordlist ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
   --results-folder ./results
 
 # Transformer
 cd ~/HunterT/transformer_pipeline
 python3 main.py evaluate \
-  --data-folder ../LTSM_Research/datasets/LM-training-datasets \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
-  --wordlist ../LTSM_Research/chosen_wordlists/big_wfuzz.txt \
+  --wordlist ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
   --results-folder ./results
 ```
 
@@ -168,7 +168,7 @@ Spot VMs can be preempted at any time. Both pipelines support `--resume` which s
 ./create_infra.sh
 
 # 2. Restore checkpoints from GCS
-gsutil -m rsync -r gs://dirhuntert-artifacts/transformer/saved_models \
+gsutil -m rsync -r gs://dirhuntert-transformer/transformer/saved_models \
   ~/HunterT/transformer_pipeline/saved_models
 
 # 3. Resume training (completed combos skipped automatically)
@@ -176,8 +176,15 @@ source ~/HunterT/.venv/bin/activate
 cd ~/HunterT/transformer_pipeline
 tmux new -s transformer
 python3 main.py train --resume \
-  --data-folder ../LTSM_Research/datasets/LM-training-datasets \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
-  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhuntert-artifacts/transformer/saved_models" \
+  --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhuntert-transformer/transformer/saved_models" \
   --sync-every-n 1
 ```
+
+
+gsutil -m rsync -r gs://dirhuntert-transformer/transformer/saved_models ./saved_models
+gsutil -m rsync -r gs://dirhuntert-transformer/transformer/results ./results
+
+gcloud compute ssh transformer-v100-vm --zone us-central1-a --project dirhunter-t
+gcloud compute config-ssh

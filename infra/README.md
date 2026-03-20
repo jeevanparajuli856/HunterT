@@ -65,7 +65,7 @@ sudo apt-get install -y python3.10-venv python3-pip git
 # (Use gsutil, scp, or git clone)
 
 # Setup venv and install dependencies
-cd HunterT/ltsm_pipeline
+cd HunterT/lstm_pipeline
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r ../requirements.txt
@@ -127,7 +127,7 @@ Spot VMs are ~70-80% cheaper but can be preempted. To handle this:
 3. **Sync to GCS periodically** to prevent data loss
 4. **Re-run same command** if preempted - completed work is automatically skipped
 
-See `../ltsm_pipeline/README.md` for full training commands.
+See `../lstm_pipeline/README.md` for full training commands.
 
 ## Cloud Storage Sync
 
@@ -141,7 +141,7 @@ BUCKET_NAME=dirhuntert-lstm ./create_storage.sh
 Run training with periodic sync:
 
 ```bash
-cd ../ltsm_pipeline
+cd ../lstm_pipeline
 python main.py train \
 	--resume \
 	--progress-file ./saved_models/train_progress.json \
@@ -153,7 +153,7 @@ python main.py train \
 Restore artifacts on a new Spot VM after preemption:
 
 ```bash
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 gsutil -m rsync -r gs://dirhuntert-lstm/lstm/saved_models ./saved_models
 gsutil -m rsync -r gs://dirhuntert-lstm/lstm/results ./results
 ```
@@ -178,7 +178,7 @@ gcloud compute ssh lstm-t4-vm --zone us-central1-a --project YOUR_PROJECT_ID
 3. Recreate Python environment:
 
 ```bash
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 python -m venv .venv
 source .venv/bin/activate
 pip install -r ../requirements.txt
@@ -187,7 +187,7 @@ pip install -r ../requirements.txt
 4. Restore saved artifacts from GCS:
 
 ```bash
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 gsutil -m rsync -r gs://dirhuntert-lstm/lstm/saved_models ./saved_models
 gsutil -m rsync -r gs://dirhuntert-lstm/lstm/results ./results
 ```
@@ -195,7 +195,7 @@ gsutil -m rsync -r gs://dirhuntert-lstm/lstm/results ./results
 5. Resume training:
 
 ```bash
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 python main.py train \
 	--resume \
 	--progress-file ./saved_models/train_progress.json \
@@ -225,3 +225,7 @@ tmux new -s lstm
 
 
 gsutil -m rsync -r ./LSTM_Research/ gs://dirhuntert-lstm/
+
+
+gcloud compute ssh lstm-t4-vm --zone us-central1-a --project dirhunter-t
+gcloud compute config-ssh

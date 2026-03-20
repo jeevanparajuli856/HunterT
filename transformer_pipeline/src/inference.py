@@ -1,7 +1,7 @@
 """
 Inference: Generate predictions from a trained DirHunterT transformer model.
 
-Interface is identical to ltsm_pipeline/src/inference.py so the same
+Interface is identical to lstm_pipeline/src/inference.py so the same
 lm_attack() function in attacks.py works without modification.
 """
 

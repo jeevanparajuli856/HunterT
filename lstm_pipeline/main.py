@@ -256,7 +256,7 @@ def main():
     
     # Train command
     train_parser = subparsers.add_parser('train', help='Train LSTM models with grid search')
-    train_parser.add_argument('--data-folder', default='../LTSM_Research/datasets/LM-training-datasets',
+    train_parser.add_argument('--data-folder', default='../LSTM_Research/datasets/LM-training-datasets',
                              help='Path to training data folder')
     train_parser.add_argument('--saved-models-folder', default='./saved_models',
                              help='Path to save trained models')
@@ -276,7 +276,7 @@ def main():
                              help='Path to training progress JSON file')
     train_parser.add_argument('--checkpoint-dir', default='./saved_models/checkpoints',
                              help='Path to save per-combo checkpoints')
-    train_parser.add_argument('--sync-cmd', default=os.environ.get('LTSM_SYNC_CMD', ''),
+    train_parser.add_argument('--sync-cmd', default=os.environ.get('LSTM_SYNC_CMD', ''),
                              help='Optional shell command to sync artifacts (e.g., gsutil rsync ...)')
     train_parser.add_argument('--sync-every-n', type=int, default=1,
                              help='Run sync command every N trained model combos')
@@ -286,11 +286,11 @@ def main():
     
     # Evaluate command
     eval_parser = subparsers.add_parser('evaluate', help='Evaluate trained models')
-    eval_parser.add_argument('--data-folder', default='../LTSM_Research/datasets/LM-training-datasets',
+    eval_parser.add_argument('--data-folder', default='../LSTM_Research/datasets/LM-training-datasets',
                             help='Path to training data folder')
     eval_parser.add_argument('--saved-models-folder', default='./saved_models',
                             help='Path to saved models')
-    eval_parser.add_argument('--wordlist-file', default='../LTSM_Research/chosen_wordlists/big_wfuzz.txt',
+    eval_parser.add_argument('--wordlist-file', default='../LSTM_Research/chosen_wordlists/big_wfuzz.txt',
                             help='Path to wordlist file')
     eval_parser.add_argument('--request-limit', type=int, default=100000,
                             help='Max requests per attack')

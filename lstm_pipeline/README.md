@@ -17,7 +17,7 @@ It is now Spot-safe for long runs by supporting:
 ## Environment
 
 ```bash
-cd ltsm_pipeline
+cd lstm_pipeline
 python -m venv .venv
 source .venv/bin/activate
 pip install -r ../requirements.txt
@@ -35,7 +35,7 @@ BUCKET_NAME=dir-huntert-lstm ./create_storage.sh
 On a fresh Spot VM, restore artifacts before resuming:
 
 ```bash
-cd ../ltsm_pipeline
+cd ../lstm_pipeline
 gsutil -m rsync -r gs://dir-huntert-lstm/lstm/saved_models ./saved_models
 gsutil -m rsync -r gs://dir-huntert-lstm/lstm/results ./results
 ```
@@ -73,7 +73,7 @@ Then evaluate with limited sweep:
 
 ```bash
 python main.py evaluate \
-  --wordlist-file ../LTSM_Research/chosen_wordlists/big_wfuzz.txt \
+  --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
   --prediction-sweep 100 500 1000
 ```
 
@@ -107,7 +107,7 @@ python main.py train \
 You can also set sync command via env var:
 
 ```bash
-export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-lstm/lstm/saved_models'
+export LSTM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-lstm/lstm/saved_models && gsutil -m rsync -r ./results gs://dir-huntert-lstm/lstm/results'
 python main.py train --resume
 ```
 
@@ -115,7 +115,7 @@ python main.py train --resume
 
 ```bash
 python main.py evaluate \
-  --wordlist-file ../LTSM_Research/chosen_wordlists/big_wfuzz.txt \
+  --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
   --prediction-sweep 100 250 500 750 1000 2000 5000 10000
 ```
 
@@ -151,9 +151,9 @@ Use `preempt_watch.sh` to detect Spot preemption notice and run an emergency syn
 In a second tmux pane/session:
 
 ```bash
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 chmod +x preempt_watch.sh
-export LTSM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-lstm/lstm/saved_models && gsutil -m rsync -r ./results gs://dir-huntert-lstm/lstm/results'
+export LSTM_SYNC_CMD='gsutil -m rsync -r ./saved_models gs://dir-huntert-lstm/lstm/saved_models && gsutil -m rsync -r ./results gs://dir-huntert-lstm/lstm/results'
 ./preempt_watch.sh
 ```
 

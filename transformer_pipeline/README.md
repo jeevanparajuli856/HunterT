@@ -31,11 +31,11 @@ Segment type embeddings classify each directory token into one of 8 structural c
 source ../.venv/bin/activate
 python3 -c "
 import sys
-sys.path.insert(0, '../ltsm_pipeline')
+sys.path.insert(0, '../lstm_pipeline')
 sys.path.insert(0, '.')
-from ltsm_pipeline.src.data import load_datasets, create_vocabulary
+from lstm_pipeline.src.data import load_datasets, create_vocabulary
 from transformer_pipeline.src.model import diagnose_segment_coverage
-train_df, _, _ = load_datasets('../LTSM_Research/datasets/LM-training-datasets')
+train_df, _, _ = load_datasets('../lstm_Research/datasets/LM-training-datasets')
 vocab = create_vocabulary(train_df, min_freq=3, max_depth=10)
 print(f'Vocab size: {len(vocab)}')
 diagnose_segment_coverage(vocab)
@@ -62,7 +62,7 @@ diagnose_segment_coverage(vocab)
 Uses the **same venv** as the LSTM pipeline — no new dependencies needed.
 
 ```bash
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 source .venv/bin/activate
 cd ~/HunterT/transformer_pipeline
 ```
@@ -98,7 +98,7 @@ Trains 1 model for 1 epoch and verifies shapes and file outputs.
 cd ~/HunterT/transformer_pipeline
 python3 main.py train \
   --smoke-test \
-  --data-folder ../LTSM_Research/datasets/LM-training-datasets \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models
 ```
 
@@ -117,7 +117,7 @@ saved_models/train_progress.json
 ```bash
 cd ~/HunterT/transformer_pipeline
 python main.py train \
-  --data-folder ../LTSM_Research/datasets/LM-training-datasets \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
   --resume \
   --progress-file ./saved_models/train_progress.json \
@@ -148,9 +148,9 @@ Run after training completes. Uses the same 119 test domains, same prediction sw
 ```bash
 cd ~/HunterT/transformer_pipeline
 python main.py evaluate \
-  --data-folder ../LTSM_Research/datasets/LM-training-datasets \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
-  --wordlist-file ../LTSM_Research/chosen_wordlists/big_wfuzz.txt \
+  --wordlist-file ../LSTM_Research/chosen_wordlists/big_wfuzz.txt \
   --prediction-sweep 100 250 500 750 1000 2000 5000 10000 \
   --results-folder ./results
 ```
@@ -169,7 +169,7 @@ results/eval_results_transformer_best.csv  — best prediction_limit per domain/
 After both LSTM and transformer evaluations are done, run the LSTM plot script with both CSVs. It generates all existing LSTM tables **plus** two new comparison tables.
 
 ```bash
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 python plot_tables.py \
   --results-csv ./results/eval_results.csv \
   --transformer-results ../transformer_pipeline/results/eval_results_transformer_best.csv \
@@ -224,7 +224,7 @@ gcloud compute ssh lstm-v100-vm-transformer --zone us-central1-a --project dirhu
 cd ~/HunterT
 
 # Activate venv (already installed from LSTM run)
-source ltsm_pipeline/.venv/bin/activate
+source lstm_pipeline/.venv/bin/activate
 
 # Verify GPU
 nvidia-smi
@@ -244,7 +244,7 @@ tmux new -s transformer
 
 cd ~/HunterT/transformer_pipeline
 python main.py train \
-  --data-folder ../LTSM_Research/datasets/LM-training-datasets \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
   --resume \
   --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhuntert-transformer/transformer/saved_models" \
@@ -260,7 +260,7 @@ Reuses the same `preempt_watch.sh` from the LSTM pipeline.
 
 ```bash
 # In a second tmux pane (Ctrl+B then %)
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 export SYNC_CMD='gsutil -m rsync -r ../transformer_pipeline/saved_models gs://dirhuntert-transformer/transformer/saved_models'
 ./preempt_watch.sh
 ```
@@ -286,7 +286,7 @@ gcloud compute ssh lstm-v100-vm-transformer --zone us-central1-a --project dirhu
 
 **3. Restore Python environment:**
 ```bash
-cd ~/HunterT/ltsm_pipeline
+cd ~/HunterT/lstm_pipeline
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r ../requirements.txt
@@ -301,7 +301,7 @@ gsutil -m rsync -r gs://dirhuntert-transformer/transformer/saved_models ./saved_
 **5. Resume training — completed combos are skipped automatically:**
 ```bash
 python main.py train \
-  --data-folder ../LTSM_Research/datasets/LM-training-datasets \
+  --data-folder ../LSTM_Research/datasets/LM-training-datasets \
   --saved-models-folder ./saved_models \
   --resume \
   --sync-cmd "gsutil -m rsync -r ./saved_models gs://dirhuntert-transformer/transformer/saved_models" \
@@ -351,10 +351,10 @@ transformer_pipeline/
     grid_search.py         # TransformerGridSearch — 96 combos, Spot-safe
     utils.py               # get_transformer_hyperparams_from_filename()
 
-# Reused from ltsm_pipeline/src (no modifications):
-  ../ltsm_pipeline/src/data.py
-  ../ltsm_pipeline/src/attacks.py
-  ../ltsm_pipeline/src/tree_builder.py
-  ../ltsm_pipeline/plot_tables.py
-  ../ltsm_pipeline/preempt_watch.sh
+# Reused from lstm_pipeline/src (no modifications):
+  ../lstm_pipeline/src/data.py
+  ../lstm_pipeline/src/attacks.py
+  ../lstm_pipeline/src/tree_builder.py
+  ../lstm_pipeline/plot_tables.py
+  ../lstm_pipeline/preempt_watch.sh
 ```

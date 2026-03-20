@@ -7,7 +7,7 @@ Commands:
     python main.py evaluate    # Evaluate best models vs LSTM on test domains
     python main.py smoke-test  # 1 model, 1 epoch shape/interface check (~2 min)
 
-Usage mirrors ltsm_pipeline/main.py so the two pipelines are directly comparable.
+Usage mirrors lstm_pipeline/main.py so the two pipelines are directly comparable.
 """
 
 import sys
@@ -27,9 +27,9 @@ warnings.filterwarnings(
 )
 
 # sys.path strategy:
-#   _ROOT (HunterT/)          -> enables 'ltsm_pipeline.src.*' as a full package path
+#   _ROOT (HunterT/)          -> enables 'lstm_pipeline.src.*' as a full package path
 #   _HERE (transformer_pipeline/) -> enables 'src.*' for transformer's own modules
-# Both packages have a 'src' subpackage; using the full ltsm_pipeline.src.* namespace
+# Both packages have a 'src' subpackage; using the full lstm_pipeline.src.* namespace
 # avoids collision and preserves lstm's internal relative imports.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.join(_HERE, '..')
@@ -41,10 +41,10 @@ from src.model import DirHunterT
 from src.inference import generate, beam_search_generate
 from src.utils import get_device, get_transformer_hyperparams_from_filename
 
-# Reuse data + attack utilities from ltsm_pipeline without modification
-from ltsm_pipeline.src.data import load_datasets, get_test_by_domain, create_vocabulary
-from ltsm_pipeline.src.tree_builder import create_tree, create_tree_with_occurrences
-from ltsm_pipeline.src.attacks import (
+# Reuse data + attack utilities from lstm_pipeline without modification
+from lstm_pipeline.src.data import load_datasets, get_test_by_domain, create_vocabulary
+from lstm_pipeline.src.tree_builder import create_tree, create_tree_with_occurrences
+from lstm_pipeline.src.attacks import (
     breadth_first_attack, depth_first_attack,
     probabilistic_attack, lm_attack,
 )
@@ -298,7 +298,7 @@ def main():
 
     # ---- train ----
     train_p = subparsers.add_parser('train', help='Train transformer models with grid search')
-    train_p.add_argument('--data-folder', default='../LTSM_Research/datasets/LM-training-datasets')
+    train_p.add_argument('--data-folder', default='../LSTM_Research/datasets/LM-training-datasets')
     train_p.add_argument('--saved-models-folder', default='./saved_models')
     train_p.add_argument('--epochs', type=int, default=200)
     train_p.add_argument('--batch-size', type=int, default=128)
@@ -320,9 +320,9 @@ def main():
 
     # ---- evaluate ----
     eval_p = subparsers.add_parser('evaluate', help='Evaluate trained transformer models')
-    eval_p.add_argument('--data-folder', default='../LTSM_Research/datasets/LM-training-datasets')
+    eval_p.add_argument('--data-folder', default='../LSTM_Research/datasets/LM-training-datasets')
     eval_p.add_argument('--saved-models-folder', default='./saved_models')
-    eval_p.add_argument('--wordlist-file', default='../LTSM_Research/chosen_wordlists/big_wfuzz.txt')
+    eval_p.add_argument('--wordlist-file', default='../LSTM_Research/chosen_wordlists/big_wfuzz.txt')
     eval_p.add_argument('--request-limit', type=int, default=100_000)
     eval_p.add_argument('--prediction-sweep', nargs='+', type=int,
                         default=[100, 250, 500, 750, 1000, 2000, 5000, 10000])

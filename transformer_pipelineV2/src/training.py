@@ -1,7 +1,7 @@
 """
 Training loop for DirHunterT transformer.
 
-Adapted from ltsm_pipeline/src/training.py.
+Adapted from lstm_pipeline/src/training.py.
 Key differences from the LSTM version:
   - No hidden state management (no init_hidden / detach_hidden calls)
   - Weight decay added to Adam (prevents overfitting on 1M-scale data)

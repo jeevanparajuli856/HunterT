@@ -38,3 +38,4 @@ echo ""
 echo "Infra created. Useful commands:"
 echo "gcloud compute ssh ${DEPLOYMENT_NAME}-vm --zone ${ZONE} --project ${PROJECT_ID}"
 echo "./destroy_infra.sh"
+
