@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 saved_models/
 results/
+results*
+saved_models*
