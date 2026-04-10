@@ -8,6 +8,7 @@ results*
 saved_models*
 /huntert
 /product/huntert/huntert
+/product/huntert/bin/
 *.test
 coverage.out
 /product/huntert/runtime/output/

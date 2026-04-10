@@ -102,6 +102,6 @@ func modelsHelp() string {
 	return `HunterT model commands
 
 Usage:
-  huntert models inspect [--model-bundle <path>] [--output text|json]
+  HunterT models inspect [--model-bundle <path>] [--output text|json]
 `
 }

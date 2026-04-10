@@ -85,6 +85,55 @@ func TestAttackRunConfigNormalizePrefersRepoPython(t *testing.T) {
 	}
 }
 
+func TestAttackRunConfigNormalizeResolvesRelativeBundleFromProductRoot(t *testing.T) {
+	repoRoot := t.TempDir()
+	productRoot := filepath.Join(repoRoot, "product", "huntert")
+	repoPython := filepath.Join(repoRoot, ".venv", "bin", "python3")
+	relativeBundle := filepath.Join("runtime", "bundles", "default")
+	expectedBundle := filepath.Join(productRoot, relativeBundle)
+
+	for _, dir := range []string{
+		filepath.Join(productRoot, "python", "huntert_runtime"),
+		filepath.Dir(repoPython),
+		expectedBundle,
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "AGENTS.md"), []byte("huntert"), 0o644); err != nil {
+		t.Fatalf("write AGENTS.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(productRoot, "go.mod"), []byte("module huntert\n"), 0o644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(repoPython, []byte("#!/usr/bin/env python3\n"), 0o755); err != nil {
+		t.Fatalf("write repo python: %v", err)
+	}
+	writeBundleFixture(t, expectedBundle)
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(wd) })
+	if err := os.Chdir(filepath.Join(repoRoot)); err != nil {
+		t.Fatalf("chdir repo root: %v", err)
+	}
+
+	cfg := AttackRunConfig{
+		Target:      "https://example.com",
+		Timeout:     5 * time.Second,
+		ModelBundle: relativeBundle,
+	}
+	if err := cfg.Normalize(); err != nil {
+		t.Fatalf("Normalize() returned error: %v", err)
+	}
+	if cfg.ModelBundle != expectedBundle {
+		t.Fatalf("expected relative bundle to resolve to %q, got %q", expectedBundle, cfg.ModelBundle)
+	}
+}
+
 func TestNormalizeExtensions(t *testing.T) {
 	values := normalizeExtensions([]string{"php, txt", ".php", "bak"})
 	expected := []string{"bak", "php", "txt"}

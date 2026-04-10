@@ -20,8 +20,33 @@ Main product paths:
 - `product/huntert/internal/`
 - `product/huntert/python/huntert_runtime/`
 - `product/huntert/runtime/bundles/default/`
+- `product/huntert/install.sh`
+- `product/huntert/Makefile`
 
-## Quick Start
+## Install From A GitHub Clone
+
+```bash
+git clone <your-github-url> HunterT
+cd HunterT
+./product/huntert/install.sh
+```
+
+The installer builds the product binary, creates a `HunterT` launcher in `~/.local/bin`, and also creates a lowercase `huntert` alias.
+
+After install:
+
+```bash
+HunterT version
+HunterT bundle verify --model-bundle runtime/bundles/default
+```
+
+If `~/.local/bin` is not already in `PATH`, add:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+## Build From Source
 
 ```bash
 source .venv/bin/activate
@@ -29,7 +54,7 @@ export PATH=/usr/local/go/bin:$PATH
 
 cd product/huntert
 /usr/local/go/bin/go test ./...
-/usr/local/go/bin/go build -o huntert ./cmd/huntert
+/usr/local/go/bin/go build -o HunterT ./cmd/huntert
 ```
 
 ## Run
@@ -37,13 +62,15 @@ cd product/huntert
 ```bash
 cd product/huntert
 
-./huntert version
-./huntert bundle verify --model-bundle runtime/bundles/default
-./huntert models inspect --model-bundle runtime/bundles/default
+./HunterT version
+./HunterT bundle verify --model-bundle runtime/bundles/default
+./HunterT models inspect --model-bundle runtime/bundles/default
 
-./huntert attack run --dry-run --target https://example.com --output json
-./huntert attack run --target https://example.com --threads 10 --max-requests 100
+./HunterT attack run --dry-run --target https://example.com --output json
+./HunterT attack run --target https://example.com --threads 10 --max-requests 100
 ```
+
+Running `HunterT` with no arguments shows the CLI help plus a rotating ASCII banner with current runtime details. Set `HUNTERT_NO_BANNER=1` if you want a quiet root help screen.
 
 ## Runtime Bundle
 
@@ -61,7 +88,7 @@ The default packaged model is:
 - checkpoint: `model_MD10_MF5_es128_nl2_dr0.2_loss3.319183.pt`
 - sha256: `03e8033274587807a55064bea29bba48943f6df2972771e959933f14eff11981`
 
-`huntert bundle verify` validates that the packaged `model.pt` matches the checksum recorded in the bundle manifest.
+`HunterT bundle verify` validates that the packaged `model.pt` matches the checksum recorded in the bundle manifest.
 
 To rebuild the default bundle from the research assets:
 
@@ -77,6 +104,7 @@ PYTHONPATH=product/huntert/python python3 -m huntert_runtime bundle export-defau
 - The CLI runs from `product/huntert/`, not from `Research/`.
 - The packaged bundle is meant to be the runtime dependency, not raw research checkpoints.
 - The current reference config is `product/huntert/configs/default.yaml`.
+- The installer wrapper exports `HUNTERT_REPO_ROOT` and `HUNTERT_PRODUCT_ROOT` so the command works from outside the repo checkout.
 
 ## Research Brief
 

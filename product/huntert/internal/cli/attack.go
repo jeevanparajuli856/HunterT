@@ -187,7 +187,7 @@ func attackHelp() string {
 	return `HunterT attack commands
 
 Usage:
-  huntert attack run --target <url> [flags]
+  HunterT attack run --target <url> [flags]
 
 Key flags:
   --threads, --timeout, --rate-limit

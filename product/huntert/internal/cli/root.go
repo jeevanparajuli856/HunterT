@@ -64,7 +64,7 @@ func runVersion(args []string) int {
 	}
 
 	info := config.VersionInfo{
-		Tool:    "huntert",
+		Tool:    displayName,
 		Version: versionValue,
 		Backend: backendMode,
 		Bridge:  bridgeMode,
@@ -78,9 +78,10 @@ func runVersion(args []string) int {
 }
 
 func rootHelp() string {
-	return `HunterT
+	return rootBanner() + `HunterT
 
 Usage:
+  HunterT <command> [flags]
   huntert <command> [flags]
 
 Commands:
@@ -90,10 +91,10 @@ Commands:
   attack run         Execute a live dirbuster-style enumeration run
 
 Examples:
-  huntert version
-  huntert models inspect --output json
-  huntert bundle verify
-  huntert attack run --target https://example.com --dry-run
+  HunterT version
+  HunterT models inspect --output json
+  HunterT bundle verify
+  HunterT attack run --target https://example.com --dry-run
 `
 }
 

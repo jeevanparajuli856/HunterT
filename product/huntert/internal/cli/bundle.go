@@ -132,6 +132,6 @@ func bundleHelp() string {
 	return `HunterT bundle commands
 
 Usage:
-  huntert bundle verify [--model-bundle <path>] [--output text|json]
+  HunterT bundle verify [--model-bundle <path>] [--output text|json]
 `
 }

@@ -472,7 +472,10 @@ func preferRepoPython(repoRoot, current string) string {
 
 func resolveBundlePath(value, productRoot string) string {
 	if strings.TrimSpace(value) != "" {
-		return value
+		if filepath.IsAbs(value) {
+			return value
+		}
+		return filepath.Join(productRoot, value)
 	}
 	return filepath.Join(productRoot, "runtime", "bundles", "default")
 }
