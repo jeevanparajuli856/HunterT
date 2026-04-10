@@ -10,7 +10,7 @@ The current active plan is:
 2. Evaluate it against LSTM and Transformer V1.
 3. Run calibration or larger follow-up experiments only if the fair V2 result justifies it.
 
-For the detailed research framing, see [Next_Plan.md](../Next_Plan.md).
+For the detailed research framing, see [Next_Plan.md](../docs/archive/research-plans/Next_Plan.md).
 
 ## What V2 Changes
 

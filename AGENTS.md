@@ -84,4 +84,4 @@ python3 main.py evaluate
 - Use `python3` instead of `python` in all commands.
 - Use the root `.venv` for Python dependencies instead of system Python.
 - If you find discrepancies between code and markdown, update the markdown and mention it briefly in the final response.
-- If the user says a workflow or convention is not good, reflect the corrected rule in this file or `AGENTS.md` when relevant.
+- If the user says a workflow or convention is not good, reflect the corrected rule in this file or `CLAUDE.md` when relevant.

@@ -6,3 +6,7 @@ saved_models/
 results/
 results*
 saved_models*
+huntert
+huntert
+*.test
+coverage.out
