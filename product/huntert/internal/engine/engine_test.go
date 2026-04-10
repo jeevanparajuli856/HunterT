@@ -16,14 +16,16 @@ import (
 
 type stubPredictor struct{}
 
-func (stubPredictor) PredictNext(tokens []string, topK int) ([]sidecar.Candidate, error) {
+func (stubPredictor) PredictNext(tokens []string, topK int) (sidecar.Prediction, error) {
 	if len(tokens) == 1 && tokens[0] == "<sos>" {
-		return []sidecar.Candidate{
-			{Token: "admin", Prob: 0.9},
-			{Token: "story", Prob: 0.8},
+		return sidecar.Prediction{
+			Candidates: []sidecar.Candidate{
+				{Token: "admin", Prob: 0.9},
+				{Token: "story", Prob: 0.8},
+			},
 		}, nil
 	}
-	return nil, nil
+	return sidecar.Prediction{OOVTokens: []string{"rare-child"}}, nil
 }
 
 func TestExpandTokenVariantsAddsDotSeparatedExtensions(t *testing.T) {
@@ -120,11 +122,15 @@ func TestRunCreatesOutputsAndFindsInterestingPaths(t *testing.T) {
 		report.ResumeState,
 		report.RequestsFile,
 		report.FindingsFile,
+		report.OOVTokensFile,
 		report.SummaryFile,
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected output file %s: %v", path, err)
 		}
+	}
+	if len(report.OOVTokens) != 1 || report.OOVTokens[0] != "rare-child" {
+		t.Fatalf("expected rare-child OOV token, got %v", report.OOVTokens)
 	}
 }
 

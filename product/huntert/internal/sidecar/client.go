@@ -19,11 +19,17 @@ type Candidate struct {
 	Prob  float64 `json:"prob"`
 }
 
+type Prediction struct {
+	Candidates []Candidate `json:"candidates,omitempty"`
+	OOVTokens  []string    `json:"oov_tokens,omitempty"`
+}
+
 type response struct {
 	Ok         bool               `json:"ok"`
 	Error      string             `json:"error,omitempty"`
 	Bundle     *config.BundleInfo `json:"bundle,omitempty"`
 	Candidates []Candidate        `json:"candidates,omitempty"`
+	OOVTokens  []string           `json:"oov_tokens,omitempty"`
 }
 
 type Client struct {
@@ -87,16 +93,19 @@ func (c *Client) InspectBundle(bundlePath string) (*config.BundleInfo, error) {
 	return resp.Bundle, nil
 }
 
-func (c *Client) PredictNext(tokens []string, topK int) ([]Candidate, error) {
+func (c *Client) PredictNext(tokens []string, topK int) (Prediction, error) {
 	resp, err := c.call(map[string]any{
 		"op":     "predict_next",
 		"tokens": tokens,
 		"top_k":  topK,
 	})
 	if err != nil {
-		return nil, err
+		return Prediction{}, err
 	}
-	return resp.Candidates, nil
+	return Prediction{
+		Candidates: resp.Candidates,
+		OOVTokens:  resp.OOVTokens,
+	}, nil
 }
 
 func (c *Client) Close() error {

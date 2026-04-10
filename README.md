@@ -76,6 +76,31 @@ Briefly:
 
 The active product runtime depends on the packaged bundle, not on source training assets.
 
+## Vocabulary And Unknown Tokens
+
+`vocab.json` is tied to the trained `model.pt`. HunterT does not modify it during runtime, because changing vocab order or size without retraining would damage prediction quality.
+
+If a path token is missing from `vocab.json`:
+
+- the LSTM sidecar maps it to the model's `<unk>` token so prediction can continue
+- the Go engine keeps using the bundled wordlist as a fallback source of candidate paths
+- HunterT records the missing token in the run output so it can be added to a future training set and bundle rebuild
+
+Each live run writes unknown-token telemetry to:
+
+```text
+<output-dir>/oov_tokens.jsonl
+```
+
+The attack summary also includes `oov_tokens_file` and `oov_tokens` in JSON output.
+
+The safe improvement loop is:
+
+- collect `oov_tokens.jsonl` from real authorized runs
+- add useful missing tokens to the training corpus or source wordlist
+- retrain or fine-tune the model with the expanded corpus
+- export a new matching bundle with `model.pt`, `vocab.json`, and `wordlist.txt`
+
 ## Build From Source
 
 ```bash

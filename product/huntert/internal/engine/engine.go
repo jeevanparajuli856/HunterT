@@ -17,7 +17,7 @@ import (
 )
 
 type Predictor interface {
-	PredictNext(tokens []string, topK int) ([]sidecar.Candidate, error)
+	PredictNext(tokens []string, topK int) (sidecar.Prediction, error)
 }
 
 type Discovery struct {
@@ -32,26 +32,28 @@ type Discovery struct {
 }
 
 type Report struct {
-	OK           bool        `json:"ok"`
-	Command      string      `json:"command"`
-	Target       string      `json:"target"`
-	Bundle       string      `json:"bundle"`
-	BundleID     string      `json:"bundle_id"`
-	OutputDir    string      `json:"output_dir"`
-	DryRun       bool        `json:"dry_run"`
-	Backend      string      `json:"backend"`
-	Engine       string      `json:"engine"`
-	Requests     int         `json:"requests"`
-	Interesting  int         `json:"interesting"`
-	Errors       int         `json:"errors"`
-	DurationMS   int64       `json:"duration_ms"`
-	Notes        []string    `json:"notes,omitempty"`
-	Discoveries  []Discovery `json:"discoveries,omitempty"`
-	Stderr       string      `json:"stderr,omitempty"`
-	ResumeState  string      `json:"resume_state,omitempty"`
-	RequestsFile string      `json:"requests_file,omitempty"`
-	FindingsFile string      `json:"discoveries_file,omitempty"`
-	SummaryFile  string      `json:"summary_file,omitempty"`
+	OK            bool        `json:"ok"`
+	Command       string      `json:"command"`
+	Target        string      `json:"target"`
+	Bundle        string      `json:"bundle"`
+	BundleID      string      `json:"bundle_id"`
+	OutputDir     string      `json:"output_dir"`
+	DryRun        bool        `json:"dry_run"`
+	Backend       string      `json:"backend"`
+	Engine        string      `json:"engine"`
+	Requests      int         `json:"requests"`
+	Interesting   int         `json:"interesting"`
+	Errors        int         `json:"errors"`
+	DurationMS    int64       `json:"duration_ms"`
+	Notes         []string    `json:"notes,omitempty"`
+	Discoveries   []Discovery `json:"discoveries,omitempty"`
+	OOVTokens     []string    `json:"oov_tokens,omitempty"`
+	Stderr        string      `json:"stderr,omitempty"`
+	ResumeState   string      `json:"resume_state,omitempty"`
+	RequestsFile  string      `json:"requests_file,omitempty"`
+	FindingsFile  string      `json:"discoveries_file,omitempty"`
+	OOVTokensFile string      `json:"oov_tokens_file,omitempty"`
+	SummaryFile   string      `json:"summary_file,omitempty"`
 }
 
 type requestEvent struct {
@@ -76,7 +78,14 @@ type runState struct {
 	Attempted   []string          `json:"attempted"`
 	Pending     []queue.Candidate `json:"pending"`
 	Discoveries []Discovery       `json:"discoveries"`
+	OOVTokens   []string          `json:"oov_tokens,omitempty"`
 	UpdatedAt   string            `json:"updated_at"`
+}
+
+type oovEvent struct {
+	Token      string   `json:"token"`
+	Context    []string `json:"context"`
+	ObservedAt string   `json:"observed_at"`
 }
 
 func Run(
@@ -105,11 +114,12 @@ func Run(
 	report.Notes = append(report.Notes, fmt.Sprintf("loaded %d wordlist entries", len(wordlist)))
 
 	if cfg.DryRun {
-		rootCandidates, err := predictor.PredictNext([]string{"<sos>"}, min(cfg.PredictionLimit, 10))
+		rootPrediction, err := predictor.PredictNext([]string{"<sos>"}, min(cfg.PredictionLimit, 10))
 		if err != nil {
 			return nil, err
 		}
-		report.Notes = append(report.Notes, fmt.Sprintf("sidecar returned %d root candidates", len(rootCandidates)))
+		report.OOVTokens = rootPrediction.OOVTokens
+		report.Notes = append(report.Notes, fmt.Sprintf("sidecar returned %d root candidates", len(rootPrediction.Candidates)))
 		return report, nil
 	}
 
@@ -119,11 +129,13 @@ func Run(
 
 	requestsPath := filepath.Join(cfg.OutputDir, "requests.jsonl")
 	discoveriesPath := filepath.Join(cfg.OutputDir, "discoveries.jsonl")
+	oovTokensPath := filepath.Join(cfg.OutputDir, "oov_tokens.jsonl")
 	statePath := filepath.Join(cfg.OutputDir, "state.json")
 	summaryPath := filepath.Join(cfg.OutputDir, "summary.json")
 	report.ResumeState = statePath
 	report.RequestsFile = requestsPath
 	report.FindingsFile = discoveriesPath
+	report.OOVTokensFile = oovTokensPath
 	report.SummaryFile = summaryPath
 
 	requestsFile, err := os.OpenFile(requestsPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
@@ -138,9 +150,19 @@ func Run(
 	}
 	defer discoveriesFile.Close()
 
+	oovTokensFile, err := os.OpenFile(oovTokensPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open oov tokens file: %w", err)
+	}
+	defer oovTokensFile.Close()
+
 	pq := queue.New()
 	seen := map[string]struct{}{}
 	attempted := []string{}
+	seenOOVTokens := map[string]struct{}{}
+	recordOOV := func(contextTokens []string, prediction sidecar.Prediction) error {
+		return recordOOVTokens(oovTokensFile, report, seenOOVTokens, contextTokens, prediction.OOVTokens)
+	}
 
 	if cfg.Resume != "" {
 		state, err := loadState(cfg.Resume)
@@ -160,11 +182,18 @@ func Run(
 			seen[pending.Path] = struct{}{}
 		}
 		report.Discoveries = append(report.Discoveries, state.Discoveries...)
+		for _, token := range state.OOVTokens {
+			if _, ok := seenOOVTokens[token]; ok {
+				continue
+			}
+			seenOOVTokens[token] = struct{}{}
+			report.OOVTokens = append(report.OOVTokens, token)
+		}
 		report.Notes = append(report.Notes, fmt.Sprintf("loaded resume state from %s", cfg.Resume))
 	}
 
 	if pq.Len() == 0 {
-		if err := seedRootCandidates(pq, seen, predictor, cfg, wordlist); err != nil {
+		if err := seedRootCandidates(pq, seen, predictor, cfg, wordlist, recordOOV); err != nil {
 			return nil, err
 		}
 	}
@@ -262,7 +291,7 @@ func Run(
 			}
 
 			if !cancelled && shouldRecurse(*event.candidate, cfg) {
-				if err := enqueueChildren(pq, seen, *event.candidate, predictor, cfg, wordlist); err != nil {
+				if err := enqueueChildren(pq, seen, *event.candidate, predictor, cfg, wordlist, recordOOV); err != nil {
 					return nil, err
 				}
 			}
@@ -282,6 +311,7 @@ func Run(
 		Attempted:   attempted,
 		Pending:     queue.Snapshot(pq),
 		Discoveries: report.Discoveries,
+		OOVTokens:   report.OOVTokens,
 		UpdatedAt:   time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
 		return nil, err
@@ -340,13 +370,20 @@ func seedRootCandidates(
 	predictor Predictor,
 	cfg config.AttackRunConfig,
 	wordlist []string,
+	recordOOV func([]string, sidecar.Prediction) error,
 ) error {
-	modelCandidates, err := predictor.PredictNext([]string{"<sos>"}, cfg.PredictionLimit)
+	contextTokens := []string{"<sos>"}
+	prediction, err := predictor.PredictNext(contextTokens, cfg.PredictionLimit)
 	if err != nil {
 		return fmt.Errorf("predict root candidates: %w", err)
 	}
+	if recordOOV != nil {
+		if err := recordOOV(contextTokens, prediction); err != nil {
+			return err
+		}
+	}
 
-	for _, candidate := range modelCandidates {
+	for _, candidate := range prediction.Candidates {
 		enqueueCandidate(pq, seen, cfg, "", candidate.Token, candidate.Prob, "model")
 	}
 	for _, token := range wordlist {
@@ -362,13 +399,20 @@ func enqueueChildren(
 	predictor Predictor,
 	cfg config.AttackRunConfig,
 	wordlist []string,
+	recordOOV func([]string, sidecar.Prediction) error,
 ) error {
-	predictions, err := predictor.PredictNext(append([]string{"<sos>"}, parent.Tokens...), cfg.PredictionLimit)
+	contextTokens := append([]string{"<sos>"}, parent.Tokens...)
+	prediction, err := predictor.PredictNext(contextTokens, cfg.PredictionLimit)
 	if err != nil {
 		return fmt.Errorf("predict children for %s: %w", parent.Path, err)
 	}
+	if recordOOV != nil {
+		if err := recordOOV(contextTokens, prediction); err != nil {
+			return err
+		}
+	}
 
-	for _, candidate := range predictions {
+	for _, candidate := range prediction.Candidates {
 		score := candidate.Prob
 		if parent.Score > 0 {
 			score = parent.Score * candidate.Prob
@@ -454,6 +498,34 @@ func loadState(path string) (*runState, error) {
 		return nil, fmt.Errorf("decode state: %w", err)
 	}
 	return &state, nil
+}
+
+func recordOOVTokens(
+	file *os.File,
+	report *Report,
+	seen map[string]struct{},
+	contextTokens []string,
+	tokens []string,
+) error {
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+		if _, ok := seen[token]; ok {
+			continue
+		}
+		seen[token] = struct{}{}
+		report.OOVTokens = append(report.OOVTokens, token)
+		if err := writeJSONLine(file, oovEvent{
+			Token:      token,
+			Context:    append([]string{}, contextTokens...),
+			ObservedAt: time.Now().UTC().Format(time.RFC3339),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateResumeState(cfg config.AttackRunConfig, state *runState) error {

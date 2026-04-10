@@ -109,8 +109,12 @@ func RenderAttackReport(w io.Writer, mode config.OutputMode, report engine.Repor
 		fmt.Sprintf("requests: %d", report.Requests),
 		fmt.Sprintf("interesting: %d", report.Interesting),
 		fmt.Sprintf("errors: %d", report.Errors),
+		fmt.Sprintf("oov_tokens: %d", len(report.OOVTokens)),
 		fmt.Sprintf("duration_ms: %d", report.DurationMS),
 		fmt.Sprintf("output_dir: %s", report.OutputDir),
+	}
+	if report.OOVTokensFile != "" {
+		lines = append(lines, fmt.Sprintf("oov_tokens_file: %s", report.OOVTokensFile))
 	}
 	if report.DryRun {
 		lines = append(lines, "mode: dry-run")

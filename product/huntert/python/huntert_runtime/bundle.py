@@ -110,10 +110,20 @@ def normalize_token(token: str) -> str:
     return "YEAR" if YEAR_PATTERN.match(token) else token
 
 
-def predict_next(bundle: LoadedBundle, tokens: list[str], top_k: int) -> list[dict[str, Any]]:
-    sequence = [normalize_token(token) for token in tokens] or ["<sos>"]
+def predict_next(bundle: LoadedBundle, tokens: list[str], top_k: int) -> dict[str, Any]:
+    raw_sequence = list(tokens) or ["<sos>"]
+    sequence = [normalize_token(token) for token in raw_sequence]
     if sequence[0] != "<sos>":
+        raw_sequence = ["<sos>"] + raw_sequence
         sequence = ["<sos>"] + sequence
+
+    oov_tokens = sorted(
+        {
+            raw
+            for raw, normalized in zip(raw_sequence, sequence)
+            if not raw.startswith("<") and normalized not in bundle.vocab
+        }
+    )
 
     indices = [bundle.vocab[token] for token in sequence]
     hidden = bundle.model.init_hidden(batch_size=1, device=bundle.device)
@@ -131,7 +141,9 @@ def predict_next(bundle: LoadedBundle, tokens: list[str], top_k: int) -> list[di
         top_probs, top_indices = torch.topk(probs, limit)
         itos = bundle.vocab.get_itos()
 
-        return [
+        candidates = [
             {"token": itos[index.item()], "prob": float(prob.item())}
             for prob, index in zip(top_probs[0], top_indices[0])
         ]
+
+    return {"candidates": candidates, "oov_tokens": oov_tokens}

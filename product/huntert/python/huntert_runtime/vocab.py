@@ -17,6 +17,9 @@ class RuntimeVocab:
     def __getitem__(self, token: str) -> int:
         return self._stoi.get(token, self._default_index)
 
+    def __contains__(self, token: str) -> bool:
+        return token in self._stoi
+
     def get_itos(self) -> list[str]:
         return list(self._tokens)
 

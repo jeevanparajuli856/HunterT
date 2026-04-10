@@ -67,7 +67,8 @@ class Server:
                 raise RuntimeError("no bundle is loaded")
             tokens = [str(token) for token in request.get("tokens", [])]
             top_k = int(request.get("top_k", 128))
-            return {"ok": True, "candidates": predict_next(self._bundle, tokens, top_k)}, False
+            prediction = predict_next(self._bundle, tokens, top_k)
+            return {"ok": True, **prediction}, False
 
         if operation == "shutdown":
             return {"ok": True}, True
