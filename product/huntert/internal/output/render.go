@@ -88,9 +88,17 @@ func RenderBundleVerify(w io.Writer, mode config.OutputMode, result any) error {
 	return err
 }
 
-func RenderAttackReport(w io.Writer, mode config.OutputMode, report engine.Report) error {
+func RenderAttackReport(w io.Writer, mode config.OutputMode, report engine.Report, findingsOnly bool) error {
 	if mode == config.OutputJSON {
 		return writeJSON(w, report)
+	}
+	if findingsOnly {
+		for _, discovery := range report.Discoveries {
+			if _, err := fmt.Fprintf(w, "%s %d\n", discovery.URL, discovery.StatusCode); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	lines := []string{

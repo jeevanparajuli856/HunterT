@@ -90,6 +90,7 @@ func runAttack(args []string) int {
 	fs.Var(&excludeStatuses, "status-exclude", "repeatable or comma-separated status codes to exclude")
 	outputDir := fs.String("output-dir", "", "directory for run outputs")
 	outputValue := fs.String("output", "text", "output mode: text|json")
+	findingsOnly := fs.Bool("findings-only", false, "text output only: print each interesting finding as '<url> <status>'")
 	resume := fs.String("resume", "", "path to a previous state.json file")
 	dryRun := fs.Bool("dry-run", false, "load the bundle and validate the sidecar without making HTTP requests")
 	modelBundle := fs.String("model-bundle", "", "path to the runtime bundle directory")
@@ -127,6 +128,7 @@ func runAttack(args []string) int {
 		StatusExclude:   []int(excludeStatuses),
 		OutputDir:       *outputDir,
 		Output:          mode,
+		FindingsOnly:    *findingsOnly,
 		Resume:          *resume,
 		DryRun:          *dryRun,
 		ModelBundle:     *modelBundle,
@@ -176,7 +178,7 @@ func runAttack(args []string) int {
 	}
 	report.Stderr = client.Stderr()
 
-	if err := output.RenderAttackReport(os.Stdout, cfg.Output, *report); err != nil {
+	if err := output.RenderAttackReport(os.Stdout, cfg.Output, *report, cfg.FindingsOnly); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -194,7 +196,7 @@ Key flags:
   --header, --user-agent, --method
   --follow-redirects, --insecure
   --extensions, --max-depth, --prediction-limit, --max-requests
-  --status-include, --status-exclude
+  --status-include, --status-exclude, --findings-only
   --output, --output-dir, --resume
   --model-bundle, --python-bin, --dry-run
 `

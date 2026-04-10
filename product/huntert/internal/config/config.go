@@ -105,6 +105,7 @@ type AttackRunConfig struct {
 	StatusExclude   []int
 	OutputDir       string
 	Output          OutputMode
+	FindingsOnly    bool
 	Resume          string
 	DryRun          bool
 	ModelBundle     string
@@ -291,6 +292,9 @@ func (cfg *AttackRunConfig) Validate() error {
 	}
 	if cfg.Method != "GET" && cfg.Method != "HEAD" {
 		return fmt.Errorf("--method must be GET or HEAD")
+	}
+	if cfg.FindingsOnly && cfg.Output != OutputText {
+		return fmt.Errorf("--findings-only requires --output text")
 	}
 	if _, err := LoadBundleManifest(cfg.ModelBundle); err != nil {
 		return err

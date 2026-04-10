@@ -144,6 +144,23 @@ func TestNormalizeExtensions(t *testing.T) {
 	}
 }
 
+func TestAttackRunConfigValidateRejectsFindingsOnlyWithJSON(t *testing.T) {
+	bundleDir := t.TempDir()
+	writeBundleFixture(t, bundleDir)
+
+	cfg := AttackRunConfig{
+		Target:       "https://example.com",
+		ModelBundle:  bundleDir,
+		Timeout:      5 * time.Second,
+		Output:       OutputJSON,
+		FindingsOnly: true,
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("Validate() returned nil error for findings-only with json output")
+	}
+}
+
 func TestVerifyModelSHA256(t *testing.T) {
 	bundleDir := t.TempDir()
 	writeBundleFixture(t, bundleDir)
