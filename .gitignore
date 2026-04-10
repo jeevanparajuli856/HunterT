@@ -6,10 +6,12 @@ saved_models/
 results/
 results*
 saved_models*
-huntert
-huntert
+/huntert
+/product/huntert/huntert
 *.test
 coverage.out
+/product/huntert/runtime/output/
+/product/huntert/runtime/logs/
 Research
 AGENTS.md
 CLAUDE.md
