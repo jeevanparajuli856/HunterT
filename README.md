@@ -3,7 +3,9 @@
 HunterT is a directory enumeration CLI built as a Go product with a packaged Python LSTM runtime.
 
 The product lives in `product/huntert/`, and the top-level repo is centered on shipping and operating the HunterT CLI.
-![alt text](image.png)
+<p align="center">
+  <img src="image.png" alt="image" />
+</p>
 ## Product
 
 HunterT currently provides:
