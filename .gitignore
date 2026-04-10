@@ -10,3 +10,10 @@ huntert
 huntert
 *.test
 coverage.out
+Research
+AGENTS.md
+CLAUDE.md
+docs
+.codex
+.claude
+.venv
