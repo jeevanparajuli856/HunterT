@@ -2,7 +2,7 @@
 
 HunterT is a directory enumeration CLI built as a Go product with a packaged Python LSTM runtime.
 
-The product lives in `product/huntert/`. The research work is preserved in `Research/`, but the top-level repo is now centered on shipping and operating the HunterT CLI.
+The product lives in `product/huntert/`, and the top-level repo is centered on shipping and operating the HunterT CLI.
 
 ## Product
 
@@ -72,7 +72,7 @@ Briefly:
 - HunterT seeds guesses from both the LSTM predictions and the bundled wordlist, then requests those paths against the target
 - interesting responses such as `200`, `401`, and `403` are reported and can trigger deeper recursion
 
-The active product runtime depends on the packaged bundle, not on raw files under `Research/`.
+The active product runtime depends on the packaged bundle, not on source training assets.
 
 ## Build From Source
 
@@ -117,7 +117,7 @@ The default packaged model is:
 The default packaged wordlist is:
 
 - bundled runtime file: `product/huntert/runtime/bundles/default/wordlist.txt`
-- source research file: `Research/LSTM_Research/chosen_wordlists/big_wfuzz.txt`
+- source wordlist: `big_wfuzz.txt`
 - current packaged size: `3024` entries
 
 `HunterT bundle verify` validates that the packaged `model.pt` matches the checksum recorded in the bundle manifest.
@@ -129,7 +129,7 @@ https://target.example/admin 200
 https://target.example/login 403
 ```
 
-To rebuild the default bundle from the research assets:
+To rebuild the default bundle:
 
 ```bash
 source .venv/bin/activate
@@ -139,7 +139,7 @@ PYTHONPATH=product/huntert/python python3 -m huntert_runtime bundle export-defau
 
 ## Change The Wordlist
 
-HunterT does not read the research wordlist directly during normal runtime. It reads `wordlist.txt` from the selected runtime bundle.
+HunterT does not read the source wordlist directly during normal runtime. It reads `wordlist.txt` from the selected runtime bundle.
 
 If you want a different wordlist, rebuild a bundle with `--wordlist` and then run HunterT against that bundle.
 
@@ -172,12 +172,7 @@ What changes when you swap the wordlist:
 
 ## Product Notes
 
-- Product code is intentionally separated from research assets.
-- The CLI runs from `product/huntert/`, not from `Research/`.
-- The packaged bundle is meant to be the runtime dependency, not raw research checkpoints.
+- The CLI runs from `product/huntert/`.
+- The packaged bundle is the runtime dependency used by the product.
 - The current reference config is `product/huntert/configs/default.yaml`.
 - The installer wrapper exports `HUNTERT_REPO_ROOT` and `HUNTERT_PRODUCT_ROOT` so the command works from outside the repo checkout.
-
-## Research Brief
-
-HunterT comes from our research on language-model-guided directory enumeration. We evaluated LSTM and transformer approaches and are keeping LSTM as the current product path. The research code, datasets, notebooks, and historical experiments remain under `Research/` for reproducibility, but they are not the operator-facing product surface.
