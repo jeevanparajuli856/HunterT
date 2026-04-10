@@ -1,0 +1,25 @@
+bundle: runtime/bundles/default
+output_dir: runtime/output
+
+http:
+  method: GET
+  threads: 20
+  timeout: 10s
+  rate_limit: 0
+  follow_redirects: false
+  insecure: false
+  user_agent: HunterT/0.2.0-dev
+
+attack:
+  max_depth: 3
+  prediction_limit: 128
+  max_requests: 1000
+  interesting_statuses:
+    - 200
+    - 204
+    - 301
+    - 302
+    - 307
+    - 308
+    - 401
+    - 403
