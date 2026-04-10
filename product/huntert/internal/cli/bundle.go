@@ -48,6 +48,9 @@ func runBundleVerify(args []string) int {
 	outputValue := fs.String("output", "text", "output mode: text|json")
 
 	if err := fs.Parse(args); err != nil {
+		if handled := handleFlagParseError(os.Stdout, os.Stderr, &stderr, err); handled {
+			return 0
+		}
 		fmt.Fprint(os.Stderr, stderr.String())
 		return 1
 	}
@@ -68,6 +71,17 @@ func runBundleVerify(args []string) int {
 		return 1
 	}
 	if err := cfg.Validate(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
+	manifest, bundleDir, err := config.VerifyBundle(cfg.ModelBundle)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	actualSHA, err := config.VerifyModelSHA256(bundleDir, *manifest)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -99,6 +113,12 @@ func runBundleVerify(args []string) int {
 			"bundle manifest loaded successfully",
 			"python sidecar loaded the bundled LSTM checkpoint",
 		},
+	}
+	if result.Bundle.Manifest.Model.SHA256 == "" {
+		result.Bundle.Manifest.Model.SHA256 = actualSHA
+		result.Notes = append(result.Notes, "model sha256 computed from packaged artifact")
+	} else {
+		result.Notes = append(result.Notes, "packaged model sha256 matches the bundle manifest")
 	}
 
 	if err := output.RenderBundleVerify(os.Stdout, cfg.Output, result); err != nil {

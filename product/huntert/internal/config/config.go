@@ -1,8 +1,11 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -45,6 +48,7 @@ type BundleModel struct {
 	Backend     string  `json:"backend"`
 	Checkpoint  string  `json:"checkpoint"`
 	SourceName  string  `json:"source_name"`
+	SHA256      string  `json:"sha256,omitempty"`
 	MaxDepth    int     `json:"max_depth"`
 	MinFreq     int     `json:"min_freq"`
 	Embedding   int     `json:"embedding_size"`
@@ -416,8 +420,42 @@ func VerifyBundle(bundlePath string) (*BundleManifest, string, error) {
 	return &manifest, absResolved, nil
 }
 
+func (manifest BundleManifest) ModelPath(bundleDir string) string {
+	return filepath.Join(bundleDir, manifest.Files.Model)
+}
+
 func (manifest BundleManifest) WordlistPath(bundleDir string) string {
 	return filepath.Join(bundleDir, manifest.Files.Wordlist)
+}
+
+func FileSHA256(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open %s: %w", path, err)
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", fmt.Errorf("hash %s: %w", path, err)
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func VerifyModelSHA256(bundleDir string, manifest BundleManifest) (string, error) {
+	actual, err := FileSHA256(manifest.ModelPath(bundleDir))
+	if err != nil {
+		return "", err
+	}
+
+	expected := strings.TrimSpace(manifest.Model.SHA256)
+	if expected == "" {
+		return actual, nil
+	}
+	if !strings.EqualFold(expected, actual) {
+		return actual, fmt.Errorf("bundle model sha256 mismatch: expected %s, got %s", expected, actual)
+	}
+	return actual, nil
 }
 
 func preferRepoPython(repoRoot, current string) string {

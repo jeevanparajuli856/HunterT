@@ -96,6 +96,9 @@ func runAttack(args []string) int {
 	pythonBin := fs.String("python-bin", "python3", "python executable for the runtime sidecar")
 
 	if err := fs.Parse(args); err != nil {
+		if handled := handleFlagParseError(os.Stdout, os.Stderr, &stderr, err); handled {
+			return 0
+		}
 		fmt.Fprint(os.Stderr, stderr.String())
 		return 1
 	}

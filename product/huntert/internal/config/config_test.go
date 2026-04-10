@@ -95,6 +95,42 @@ func TestNormalizeExtensions(t *testing.T) {
 	}
 }
 
+func TestVerifyModelSHA256(t *testing.T) {
+	bundleDir := t.TempDir()
+	writeBundleFixture(t, bundleDir)
+
+	modelPath := filepath.Join(bundleDir, "model.pt")
+	hash, err := FileSHA256(modelPath)
+	if err != nil {
+		t.Fatalf("FileSHA256(): %v", err)
+	}
+
+	manifest := BundleManifest{
+		Files: BundleFiles{Model: "model.pt"},
+		Model: BundleModel{SHA256: hash},
+	}
+	actual, err := VerifyModelSHA256(bundleDir, manifest)
+	if err != nil {
+		t.Fatalf("VerifyModelSHA256() returned error: %v", err)
+	}
+	if actual != hash {
+		t.Fatalf("expected sha %q, got %q", hash, actual)
+	}
+}
+
+func TestVerifyModelSHA256Mismatch(t *testing.T) {
+	bundleDir := t.TempDir()
+	writeBundleFixture(t, bundleDir)
+
+	manifest := BundleManifest{
+		Files: BundleFiles{Model: "model.pt"},
+		Model: BundleModel{SHA256: "deadbeef"},
+	}
+	if _, err := VerifyModelSHA256(bundleDir, manifest); err == nil {
+		t.Fatalf("VerifyModelSHA256() returned nil error for mismatched hash")
+	}
+}
+
 func writeBundleFixture(t *testing.T, bundleDir string) {
 	t.Helper()
 

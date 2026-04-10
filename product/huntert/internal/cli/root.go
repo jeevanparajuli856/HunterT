@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -49,6 +50,9 @@ func runVersion(args []string) int {
 
 	outputValue := fs.String("output", "text", "output mode: text|json")
 	if err := fs.Parse(args); err != nil {
+		if handled := handleFlagParseError(os.Stdout, os.Stderr, &stderr, err); handled {
+			return 0
+		}
 		fmt.Fprint(os.Stderr, stderr.String())
 		return 1
 	}
@@ -91,4 +95,14 @@ Examples:
   huntert bundle verify
   huntert attack run --target https://example.com --dry-run
 `
+}
+
+func handleFlagParseError(stdout, stderr *os.File, buffer *bytes.Buffer, err error) bool {
+	if !errors.Is(err, flag.ErrHelp) {
+		return false
+	}
+	if buffer != nil {
+		fmt.Fprint(stdout, buffer.String())
+	}
+	return true
 }

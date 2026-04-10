@@ -1,60 +1,69 @@
 # HunterT
 
-HunterT is a Go CLI for directory enumeration backed by a packaged Python LSTM runtime. Product code is separated from research code: the operator-facing CLI lives under `product/huntert/`, while training, experiments, and source datasets stay in the repo root research directories.
+HunterT is a directory enumeration CLI built as a Go product with a packaged Python LSTM runtime.
 
-## Repo Layout
+The product lives in `product/huntert/`. The research work is preserved in `Research/`, but the top-level repo is now centered on shipping and operating the HunterT CLI.
 
-Product:
+## Product
+
+HunterT currently provides:
+
+- a Go CLI entrypoint
+- a Go HTTP enumeration engine
+- a long-lived Python LSTM sidecar for model prediction
+- a packaged default runtime bundle with model, vocab, and wordlist
+- bundle verification with checksum validation for the packaged model
+
+Main product paths:
+
 - `product/huntert/cmd/huntert/`
 - `product/huntert/internal/`
 - `product/huntert/python/huntert_runtime/`
 - `product/huntert/runtime/bundles/default/`
 
-Research:
-- `lstm_pipeline/`
-- `transformer_pipeline/`
-- `transformer_pipelineV2/`
-- `LSTM_Research/`
-- `infra/`
-- `infra_T_V100/`
-- `scripts/`
-
-Docs:
-- `docs/overview/repo-map.md`
-- `docs/product/`
-- `docs/architecture/decisions/`
-- `docs/plans/current-sprint.md`
-
-## Environment
+## Quick Start
 
 ```bash
 source .venv/bin/activate
-python3 --version
 export PATH=/usr/local/go/bin:$PATH
-go version
-```
 
-## Build And Run
-
-```bash
 cd product/huntert
 /usr/local/go/bin/go test ./...
 /usr/local/go/bin/go build -o huntert ./cmd/huntert
 ```
 
+## Run
+
 ```bash
+cd product/huntert
+
 ./huntert version
-./huntert bundle verify
-./huntert models inspect
-./huntert attack run --dry-run --target https://example.com
-./huntert attack run --target https://example.com --max-requests 100 --threads 10
+./huntert bundle verify --model-bundle runtime/bundles/default
+./huntert models inspect --model-bundle runtime/bundles/default
+
+./huntert attack run --dry-run --target https://example.com --output json
+./huntert attack run --target https://example.com --threads 10 --max-requests 100
 ```
 
 ## Runtime Bundle
 
-The default product bundle is already packaged under `product/huntert/runtime/bundles/default/`. At runtime, the CLI uses the packaged checkpoint, vocabulary, and wordlist from that bundle rather than reading raw research assets directly.
+HunterT ships with a packaged default bundle under `product/huntert/runtime/bundles/default/`.
 
-To rebuild the default bundle from the research sources:
+That bundle contains:
+
+- `model.pt`
+- `vocab.json`
+- `wordlist.txt`
+- `manifest.json`
+
+The default packaged model is:
+
+- checkpoint: `model_MD10_MF5_es128_nl2_dr0.2_loss3.319183.pt`
+- sha256: `03e8033274587807a55064bea29bba48943f6df2972771e959933f14eff11981`
+
+`huntert bundle verify` validates that the packaged `model.pt` matches the checksum recorded in the bundle manifest.
+
+To rebuild the default bundle from the research assets:
 
 ```bash
 source .venv/bin/activate
@@ -62,25 +71,13 @@ PYTHONPATH=product/huntert/python python3 -m huntert_runtime bundle export-defau
   --bundle product/huntert/runtime/bundles/default
 ```
 
-Bundle source inputs:
-- `lstm_pipeline/saved_models/model_MD10_MF5_es128_nl2_dr0.2_loss3.319183.pt`
-- `LSTM_Research/chosen_wordlists/big_wfuzz.txt`
+## Product Notes
 
-## Research Commands
+- Product code is intentionally separated from research assets.
+- The CLI runs from `product/huntert/`, not from `Research/`.
+- The packaged bundle is meant to be the runtime dependency, not raw research checkpoints.
+- The current reference config is `product/huntert/configs/default.yaml`.
 
-```bash
-cd lstm_pipeline
-python3 main.py train
-python3 main.py evaluate
-python3 plot_tables.py
-```
+## Research Brief
 
-```bash
-cd transformer_pipeline
-python3 main.py train
-python3 main.py evaluate
-
-cd ../transformer_pipelineV2
-python3 main.py train-diagnostic
-python3 main.py evaluate
-```
+HunterT comes from our research on language-model-guided directory enumeration. We evaluated LSTM and transformer approaches and are keeping LSTM as the current product path. The research code, datasets, notebooks, and historical experiments remain under `Research/` for reproducibility, but they are not the operator-facing product surface.

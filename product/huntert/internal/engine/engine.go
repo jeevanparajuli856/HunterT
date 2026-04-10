@@ -147,6 +147,9 @@ func Run(
 		if err != nil {
 			return nil, err
 		}
+		if err := validateResumeState(cfg, state); err != nil {
+			return nil, err
+		}
 		for _, path := range state.Attempted {
 			seen[path] = struct{}{}
 			attempted = append(attempted, path)
@@ -199,11 +202,16 @@ func Run(
 	started := time.Now()
 	inFlight := 0
 	cancelled := false
+	limiter := newDispatchLimiter(cfg.RateLimit)
 
 	for {
 		for !cancelled && inFlight < cfg.Threads && pq.Len() > 0 {
 			candidate := queue.PopCandidate(pq)
 			if candidate == nil {
+				break
+			}
+			if !limiter.Wait(ctx) {
+				cancelled = true
 				break
 			}
 			workCh <- candidate
@@ -283,6 +291,47 @@ func Run(
 	}
 
 	return report, nil
+}
+
+type dispatchLimiter struct {
+	interval time.Duration
+	last     time.Time
+}
+
+func newDispatchLimiter(rateLimit float64) *dispatchLimiter {
+	if rateLimit <= 0 {
+		return nil
+	}
+
+	interval := time.Duration(float64(time.Second) / rateLimit)
+	if interval <= 0 {
+		interval = time.Nanosecond
+	}
+	return &dispatchLimiter{interval: interval}
+}
+
+func (limiter *dispatchLimiter) Wait(ctx context.Context) bool {
+	if limiter == nil {
+		return true
+	}
+	if limiter.last.IsZero() {
+		limiter.last = time.Now()
+		return true
+	}
+
+	waitFor := time.Until(limiter.last.Add(limiter.interval))
+	if waitFor > 0 {
+		timer := time.NewTimer(waitFor)
+		defer timer.Stop()
+
+		select {
+		case <-ctx.Done():
+			return false
+		case <-timer.C:
+		}
+	}
+	limiter.last = time.Now()
+	return true
 }
 
 func seedRootCandidates(
@@ -407,6 +456,19 @@ func loadState(path string) (*runState, error) {
 	return &state, nil
 }
 
+func validateResumeState(cfg config.AttackRunConfig, state *runState) error {
+	if state == nil {
+		return nil
+	}
+	if strings.TrimSpace(state.Target) != "" && state.Target != cfg.Target {
+		return fmt.Errorf("resume state target %q does not match --target %q", state.Target, cfg.Target)
+	}
+	if strings.TrimSpace(state.Bundle) != "" && filepath.Clean(state.Bundle) != filepath.Clean(cfg.ModelBundle) {
+		return fmt.Errorf("resume state bundle %q does not match --model-bundle %q", state.Bundle, cfg.ModelBundle)
+	}
+	return nil
+}
+
 func saveState(path string, state runState) error {
 	return writeJSONFile(path, state)
 }
@@ -486,7 +548,7 @@ func expandTokenVariants(token string, extensions []string) []string {
 			continue
 		}
 		for _, extension := range extensions {
-			variant := base + extension
+			variant := base + "." + extension
 			if _, ok := seen[variant]; ok {
 				continue
 			}

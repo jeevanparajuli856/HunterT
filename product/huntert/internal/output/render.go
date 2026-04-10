@@ -42,6 +42,7 @@ func RenderBundleInfo(w io.Writer, mode config.OutputMode, info config.BundleInf
 		fmt.Sprintf("path: %s", info.BundleDir),
 		fmt.Sprintf("backend: %s", info.Manifest.Backend),
 		fmt.Sprintf("model: %s", info.Manifest.Model.SourceName),
+		fmt.Sprintf("model sha256: %s", valueOrUnavailable(info.Manifest.Model.SHA256)),
 		fmt.Sprintf("vocab size: %d", info.VocabSize),
 		fmt.Sprintf("wordlist entries: %d", info.WordlistCount),
 	}
@@ -76,6 +77,7 @@ func RenderBundleVerify(w io.Writer, mode config.OutputMode, result any) error {
 		fmt.Sprintf("bundle: %s", typed.Bundle.Manifest.Name),
 		fmt.Sprintf("path: %s", typed.Bundle.BundleDir),
 		fmt.Sprintf("model: %s", typed.Bundle.Manifest.Model.SourceName),
+		fmt.Sprintf("model sha256: %s", valueOrUnavailable(typed.Bundle.Manifest.Model.SHA256)),
 		fmt.Sprintf("vocab size: %d", typed.Bundle.VocabSize),
 		fmt.Sprintf("wordlist entries: %d", typed.Bundle.WordlistCount),
 	}
@@ -140,4 +142,12 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func valueOrUnavailable(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "unavailable"
+	}
+	return value
 }

@@ -41,6 +41,9 @@ func runModelsInspect(args []string) int {
 	outputValue := fs.String("output", "text", "output mode: text|json")
 
 	if err := fs.Parse(args); err != nil {
+		if handled := handleFlagParseError(os.Stdout, os.Stderr, &stderr, err); handled {
+			return 0
+		}
 		fmt.Fprint(os.Stderr, stderr.String())
 		return 1
 	}

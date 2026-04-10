@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -15,6 +16,14 @@ DEFAULT_MODEL = REPO_ROOT / "Research" / "lstm_pipeline" / "saved_models" / "mod
 DEFAULT_TRAIN_DATA = REPO_ROOT / "Research" / "LSTM_Research" / "datasets" / "LM-training-datasets"
 DEFAULT_WORDLIST = REPO_ROOT / "Research" / "LSTM_Research" / "chosen_wordlists" / "big_wfuzz.txt"
 DEFAULT_OUTPUT = REPO_ROOT / "product" / "huntert" / "runtime" / "bundles" / "default"
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def export_bundle(
@@ -69,6 +78,7 @@ def export_bundle(
             "backend": "python-lstm",
             "checkpoint": model_path.name,
             "source_name": model_path.name,
+            "sha256": sha256_file(output_dir / model_filename),
             "max_depth": params["max_depth"],
             "min_freq": params["min_freq"],
             "embedding_size": params["embedding_size"],
